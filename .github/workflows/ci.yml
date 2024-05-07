@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - '*'
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install tools
+        run: brew install swiftlint
+
+      - name: Run SwiftLint
+        run: make lint
+
+  build:
+    name: Build
+    runs-on: macos-14
+    strategy:
+      matrix:
+        config: ['debug', 'release']
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install tools
+        run: gem install xcpretty
+
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Build platforms in ${{ matrix.config }}
+        run: make CONFIG=${{ matrix.config }} build-all-platforms
