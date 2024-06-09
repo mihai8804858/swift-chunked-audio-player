@@ -7,6 +7,10 @@ final class AudioBuffersQueue {
 
     private(set) var duration = CMTime.zero
 
+    var isEmpty: Bool {
+        buffers.withLock(\.isEmpty)
+    }
+
     init(audioDescription: AudioStreamBasicDescription) {
         self.audioDescription = audioDescription
         self.duration = CMTime(value: 0, timescale: Int32(audioDescription.mSampleRate))
@@ -27,10 +31,21 @@ final class AudioBuffersQueue {
         buffers.withLock { $0.append(buffer) }
     }
 
+    func peek() -> CMSampleBuffer? {
+        buffers.withLock { $0.first }
+    }
+
     func dequeue() -> CMSampleBuffer? {
         buffers.withLock { buffers in
             if buffers.isEmpty { return nil }
             return buffers.removeFirst()
+        }
+    }
+
+    func removeFirst() {
+        buffers.withLock { buffers in
+            if buffers.isEmpty { return }
+            buffers.removeFirst()
         }
     }
 
