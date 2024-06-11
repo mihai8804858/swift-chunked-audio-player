@@ -15,6 +15,8 @@ final class AudioFileStream {
     private let receiveASBD: ASBDCallback
     private let receivePackets: PacketsCallback
 
+    private let syncQueue = DispatchQueue(label: "com.audio-player.file-stream.queue", qos: .userInitiated)
+
     private(set) var audioStreamID: AudioFileStreamID?
     private(set) var fileTypeID: AudioFileTypeID?
 
@@ -32,41 +34,49 @@ final class AudioFileStream {
 
     @discardableResult
     func open() -> Self {
-        let instance = UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
-        let status = AudioFileStreamOpen(instance, { instance, _, propertyID, _ in
-            let stream = Unmanaged<AudioFileStream>.fromOpaque(instance).takeUnretainedValue()
-            stream.onFileStreamPropertyReceived(propertyID: propertyID)
-        }, { instance, numberBytes, numberPackets, bytes, packets in
-            let stream = Unmanaged<AudioFileStream>.fromOpaque(instance).takeUnretainedValue()
-            stream.onFileStreamPacketsReceived(
-                numberOfBytes: numberBytes,
-                bytes: bytes,
-                numberOfPackets: numberPackets,
-                packets: packets
-            )
-        }, fileTypeID ?? 0, &audioStreamID )
-        if status != noErr { receiveError(.status(status)) }
-        if audioStreamID == nil { receiveError(.streamNotOpened) }
+        syncQueue.sync {
+            let instance = UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
+            let status = AudioFileStreamOpen(instance, { instance, _, propertyID, _ in
+                let stream = Unmanaged<AudioFileStream>.fromOpaque(instance).takeUnretainedValue()
+                stream.onFileStreamPropertyReceived(propertyID: propertyID)
+            }, { instance, numberBytes, numberPackets, bytes, packets in
+                let stream = Unmanaged<AudioFileStream>.fromOpaque(instance).takeUnretainedValue()
+                stream.onFileStreamPacketsReceived(
+                    numberOfBytes: numberBytes,
+                    bytes: bytes,
+                    numberOfPackets: numberPackets,
+                    packets: packets
+                )
+            }, fileTypeID ?? 0, &audioStreamID )
+            if status != noErr { receiveError(.status(status)) }
+            if audioStreamID == nil { receiveError(.streamNotOpened) }
 
-        return self
+            return self
+        }
     }
 
     func close() {
-        audioStreamID.flatMap { _ = AudioFileStreamClose($0) }
-        audioStreamID = nil
+        syncQueue.sync {
+            audioStreamID.flatMap { _ = AudioFileStreamClose($0) }
+            audioStreamID = nil
+        }
     }
 
     func parseData(_ data: Data) {
-        guard let audioStreamID else { return }
-        data.withUnsafeBytes { pointer in
-            guard let baseAddress = pointer.baseAddress else { return }
-            AudioFileStreamParseBytes(audioStreamID, UInt32(data.count), baseAddress, [])
+        syncQueue.sync {
+            guard let audioStreamID else { return }
+            data.withUnsafeBytes { pointer in
+                guard let baseAddress = pointer.baseAddress else { return }
+                AudioFileStreamParseBytes(audioStreamID, UInt32(data.count), baseAddress, [])
+            }
         }
     }
 
     func finishDataParsing() {
-        guard let audioStreamID else { return }
-        AudioFileStreamParseBytes(audioStreamID, 0, nil, [])
+        syncQueue.sync {
+            guard let audioStreamID else { return }
+            AudioFileStreamParseBytes(audioStreamID, 0, nil, [])
+        }
     }
 
     // MARK: - Private
