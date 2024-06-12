@@ -12,6 +12,7 @@ public final class AudioPlayer: ObservableObject {
     @Published public private(set) var state = AudioPlayerState.initial
     @Published public private(set) var rate = Float.zero
     @Published public private(set) var currentTime = CMTime.zero
+    @Published public private(set) var currentBuffer: CMSampleBuffer?
 
     public var volume: Float {
         get { synchronizer?.volume ?? 0 }
@@ -48,6 +49,7 @@ public final class AudioPlayer: ObservableObject {
         setRate(.zero)
         setError(nil)
         setState(.initial)
+        setCurrentBuffer(nil)
     }
 
     public func pause() {
@@ -98,6 +100,8 @@ public final class AudioPlayer: ObservableObject {
             self?.setState(.playing)
         } onPaused: { [weak self] in
             self?.setState(.paused)
+        } onSampleBufferChanged: { [weak self] buffer in
+            self?.setCurrentBuffer(buffer)
         }
         synchronizer?.prepare(type: type)
     }
@@ -126,6 +130,12 @@ public final class AudioPlayer: ObservableObject {
     private func setTime(_ time: CMTime) {
         DispatchQueue.main.async { [weak self] in
             self?.currentTime = time
+        }
+    }
+
+    private func setCurrentBuffer(_ buffer: CMSampleBuffer?) {
+        DispatchQueue.main.async { [weak self] in
+            self?.currentBuffer = buffer
         }
     }
 }

@@ -9,6 +9,7 @@ final class AudioSynchronizer {
     typealias CompleteCallback = () -> Void
     typealias PlayingCallback = () -> Void
     typealias PausedCallback = () -> Void
+    typealias SampleBufferCallback = (CMSampleBuffer?) -> Void
 
     private let queue = DispatchQueue(label: "audio.player.queue")
     private let onRateChanged: RateCallback
@@ -17,6 +18,7 @@ final class AudioSynchronizer {
     private let onComplete: CompleteCallback
     private let onPlaying: PlayingCallback
     private let onPaused: PausedCallback
+    private let onSampleBufferChanged: SampleBufferCallback
     private let timeUpdateInterval: CMTime
 
     private var receiveComplete = false
@@ -24,6 +26,7 @@ final class AudioSynchronizer {
     private var audioFileStream: AudioFileStream?
     private var audioRenderer: AVSampleBufferAudioRenderer?
     private var audioSynchronizer: AVSampleBufferRenderSynchronizer?
+    private var currentSampleBufferTime: CMTime?
 
     private var audioRendererErrorCancellable: AnyCancellable?
     private var audioRendererRateCancellable: AnyCancellable?
@@ -46,7 +49,8 @@ final class AudioSynchronizer {
         onError: @escaping ErrorCallback = { _ in },
         onComplete: @escaping CompleteCallback = {},
         onPlaying: @escaping PlayingCallback = {},
-        onPaused: @escaping PausedCallback = {}
+        onPaused: @escaping PausedCallback = {},
+        onSampleBufferChanged: @escaping SampleBufferCallback = { _ in }
     ) {
         self.timeUpdateInterval = timeUpdateInterval
         self.onRateChanged = onRateChanged
@@ -55,6 +59,7 @@ final class AudioSynchronizer {
         self.onComplete = onComplete
         self.onPlaying = onPlaying
         self.onPaused = onPaused
+        self.onSampleBufferChanged = onSampleBufferChanged
     }
 
     func prepare(type: AudioFileTypeID? = nil) {
@@ -103,6 +108,8 @@ final class AudioSynchronizer {
         audioRenderer?.stopRequestingMediaData()
         audioRenderer = nil
         audioSynchronizer = nil
+        currentSampleBufferTime = nil
+        onSampleBufferChanged(nil)
     }
 
     // MARK: - Private
@@ -218,6 +225,7 @@ final class AudioSynchronizer {
             queue: queue
         ).sink { [weak self] time in
             guard let self else { return }
+            updateCurrentBufferIfNeeded(at: time)
             if let audioBuffersQueue, let audioSynchronizer, time >= audioBuffersQueue.duration {
                 onTimeChanged(audioBuffersQueue.duration)
                 audioSynchronizer.setRate(0.0, time: audioSynchronizer.currentTime())
@@ -228,6 +236,15 @@ final class AudioSynchronizer {
                 onTimeChanged(time)
             }
         }
+    }
+
+    private func updateCurrentBufferIfNeeded(at time: CMTime) {
+        guard let audioBuffersQueue,
+              let buffer = audioBuffersQueue.buffer(at: time),
+              buffer.presentationTimeStamp != currentSampleBufferTime else { return }
+        onSampleBufferChanged(buffer)
+        currentSampleBufferTime = buffer.presentationTimeStamp
+        audioBuffersQueue.removeBuffer(at: time)
     }
 
     private func cancelTimeObservation() {

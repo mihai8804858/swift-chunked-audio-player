@@ -15,9 +15,10 @@ struct Shake: GeometryEffect {
 struct SpeechToTextView: View {
     private let api = OpenAI()
 
-    @FocusState private var isFocused: Bool
     @AppStorage("apiKey") private var apiKey: String = ""
-    @ObservedObject private var player = AudioPlayer()
+    @FocusState private var isFocused: Bool
+    @StateObject private var player = AudioPlayer()
+    @StateObject private var decibelsModel = DecibelsViewModel()
 
     @State private var format = SpeechFormat.mp3
     @State private var voice = SpeechVoice.alloy
@@ -28,18 +29,20 @@ struct SpeechToTextView: View {
     @State private var attempts = 0
     @State private var text = ""
 
+    private var volumeBinding: Binding<Float> {
+        Binding<Float> {
+            player.volume
+        } set: { volume in
+            player.volume = volume
+        }
+    }
+
     var body: some View {
         VStack(alignment: .center, spacing: 24) {
             inputTextField
-            AudioControlsView(player: player) {
-                switch player.state {
-                case .initial, .failed, .completed: performConversion()
-                case .playing: player.pause()
-                case .paused: player.resume()
-                }
-            } onStop: {
-                player.stop()
-            }
+            controlsView
+            volumeView
+            decibelsView
         }
         .padding()
         .frame(maxHeight: .infinity)
@@ -78,13 +81,17 @@ struct SpeechToTextView: View {
             print("Error = \(error.flatMap { $0.debugDescription } ?? "nil")")
         }
         .onChange(of: player.currentTime) { _, time in
+            decibelsModel.setTime(time)
             print("Time = \(time.seconds)")
         }
         .onChange(of: player.state) { _, state in
-            print("State = \(state)")
+            handleState(state)
         }
         .onChange(of: player.rate) { _, rate in
             print("Rate = \(rate)")
+        }
+        .onChange(of: player.currentBuffer) { _, buffer in
+            decibelsModel.addBuffer(buffer)
         }
         #if os(iOS) || os(visionOS)
         .navigationBarTitleDisplayMode(.inline)
@@ -103,6 +110,41 @@ struct SpeechToTextView: View {
             .submitLabel(.return)
             .autocorrectionDisabled()
             .modifier(Shake(animatableData: CGFloat(attempts)))
+    }
+
+    @ViewBuilder
+    private var controlsView: some View {
+        AudioControlsView(player: player) {
+            switch player.state {
+            case .initial, .failed, .completed: performConversion()
+            case .playing: player.pause()
+            case .paused: player.resume()
+            }
+        } onStop: {
+            player.stop()
+        }
+    }
+
+    @ViewBuilder
+    private var volumeView: some View {
+        VStack {
+            Text("Volume: \(Int(player.volume * 100))")
+            Slider(value: volumeBinding, in: 0...1, step: 0.01)
+        }
+        .frame(maxWidth: 200)
+    }
+
+    @ViewBuilder
+    private var decibelsView: some View {
+        if let decibels = decibelsModel.decibels,
+           let decibelsFraction = decibelsModel.decibelsFraction {
+            VStack {
+                Text("Decibels: \(Int(decibels))")
+                ProgressView(value: decibelsFraction)
+                    .animation(.bouncy, value: decibelsFraction)
+            }
+            .frame(maxWidth: 200)
+        }
     }
 
     @ViewBuilder
@@ -190,6 +232,16 @@ struct SpeechToTextView: View {
         } else {
             errorMessage = nil
             didFail = false
+        }
+    }
+
+    private func handleState(_ state: AudioPlayerState) {
+        print("State = \(state)")
+        switch state {
+        case .initial, .completed, .failed:
+            decibelsModel.removeAll()
+        default:
+            break
         }
     }
 }
