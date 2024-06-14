@@ -7,6 +7,8 @@ public final class AudioPlayer: ObservableObject {
     private let timeUpdateInterval: CMTime
     private var task: Task<Void, Never>?
     private var synchronizer: AudioSynchronizer?
+    private let didStartPlaying: @Sendable () -> Void
+    private let didFinishPlaying: @Sendable () -> Void
 
     @Published public private(set) var error: AudioPlayerError?
     @Published public private(set) var state = AudioPlayerState.initial
@@ -24,8 +26,14 @@ public final class AudioPlayer: ObservableObject {
         set { synchronizer?.isMuted = newValue }
     }
 
-    public init(timeUpdateInterval: CMTime = CMTime(value: 1, timescale: 10)) {
+    public init(
+      timeUpdateInterval: CMTime = CMTime(value: 1, timescale: 10),
+      didStartPlaying: @escaping @Sendable () -> Void = {},
+      didFinishPlaying: @escaping @Sendable () -> Void = {}
+    ) {
         self.timeUpdateInterval = timeUpdateInterval
+        self.didStartPlaying = didStartPlaying
+        self.didFinishPlaying = didFinishPlaying
     }
 
     deinit {
@@ -94,10 +102,13 @@ public final class AudioPlayer: ObservableObject {
             self?.setTime(time)
         } onError: { [weak self] error in
             self?.setError(error)
+          self?.didFinishPlaying()
         } onComplete: { [weak self] in
             self?.setState(.completed)
+            self?.didFinishPlaying()
         } onPlaying: { [weak self] in
             self?.setState(.playing)
+            self?.didStartPlaying()
         } onPaused: { [weak self] in
             self?.setState(.paused)
         } onSampleBufferChanged: { [weak self] buffer in
