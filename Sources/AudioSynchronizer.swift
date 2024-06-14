@@ -9,6 +9,7 @@ final class AudioSynchronizer {
     typealias CompleteCallback = () -> Void
     typealias PlayingCallback = () -> Void
     typealias PausedCallback = () -> Void
+    typealias SampleBufferCallback = (CMSampleBuffer?) -> Void
 
     private let queue = DispatchQueue(label: "audio.player.queue")
     private let onRateChanged: RateCallback
@@ -17,13 +18,15 @@ final class AudioSynchronizer {
     private let onComplete: CompleteCallback
     private let onPlaying: PlayingCallback
     private let onPaused: PausedCallback
+    private let onSampleBufferChanged: SampleBufferCallback
     private let timeUpdateInterval: CMTime
 
-    private var receiveComplete =  false
+    private var receiveComplete = false
     private var audioBuffersQueue: AudioBuffersQueue?
     private var audioFileStream: AudioFileStream?
     private var audioRenderer: AVSampleBufferAudioRenderer?
     private var audioSynchronizer: AVSampleBufferRenderSynchronizer?
+    private var currentSampleBufferTime: CMTime?
 
     private var audioRendererErrorCancellable: AnyCancellable?
     private var audioRendererRateCancellable: AnyCancellable?
@@ -46,7 +49,8 @@ final class AudioSynchronizer {
         onError: @escaping ErrorCallback = { _ in },
         onComplete: @escaping CompleteCallback = {},
         onPlaying: @escaping PlayingCallback = {},
-        onPaused: @escaping PausedCallback = {}
+        onPaused: @escaping PausedCallback = {},
+        onSampleBufferChanged: @escaping SampleBufferCallback = { _ in }
     ) {
         self.timeUpdateInterval = timeUpdateInterval
         self.onRateChanged = onRateChanged
@@ -55,6 +59,7 @@ final class AudioSynchronizer {
         self.onComplete = onComplete
         self.onPlaying = onPlaying
         self.onPaused = onPaused
+        self.onSampleBufferChanged = onSampleBufferChanged
     }
 
     func prepare(type: AudioFileTypeID? = nil) {
@@ -99,8 +104,12 @@ final class AudioSynchronizer {
         closeFileStream()
         cancelObservation()
         receiveComplete = false
-        audioSynchronizer = nil
+        audioRenderer.flatMap { audioSynchronizer?.removeRenderer($0, at: .zero) }
+        audioRenderer?.stopRequestingMediaData()
         audioRenderer = nil
+        audioSynchronizer = nil
+        currentSampleBufferTime = nil
+        onSampleBufferChanged(nil)
     }
 
     // MARK: - Private
@@ -140,28 +149,22 @@ final class AudioSynchronizer {
     ) {
         observeRenderer(audioRenderer, synchronizer: audioSynchronizer)
         audioRenderer.requestMediaDataWhenReady(on: queue) { [weak self] in
-            self?.provideMediaDataIfNeeded(
+            self?.provideMediaDataIfNeeded()
+        }
+    }
+
+    private func provideMediaDataIfNeeded() {
+        guard let audioRenderer, let audioSynchronizer, let audioBuffersQueue else { return }
+        while let buffer = audioBuffersQueue.peek(), audioRenderer.isReadyForMoreMediaData {
+            audioRenderer.enqueue(buffer)
+            audioBuffersQueue.removeFirst()
+            startPlaybackIfCan(
                 audioRenderer: audioRenderer,
                 audioSynchronizer: audioSynchronizer
             )
         }
-    }
-
-    private func provideMediaDataIfNeeded(
-        audioRenderer: AVSampleBufferAudioRenderer,
-        audioSynchronizer: AVSampleBufferRenderSynchronizer
-    ) {
-        while audioRenderer.isReadyForMoreMediaData {
-            if let buffer = audioBuffersQueue?.dequeue() {
-                audioRenderer.enqueue(buffer)
-                startPlaybackIfCan(
-                    audioRenderer: audioRenderer,
-                    audioSynchronizer: audioSynchronizer
-                )
-            } else if receiveComplete {
-                audioRenderer.stopRequestingMediaData()
-                break
-            }
+        if audioBuffersQueue.isEmpty && receiveComplete {
+            audioRenderer.stopRequestingMediaData()
         }
     }
 
@@ -203,10 +206,11 @@ final class AudioSynchronizer {
     private func observeRate(_ audioSynchronizer: AVSampleBufferRenderSynchronizer) {
         cancelRateObservation()
         let name = AVSampleBufferRenderSynchronizer.rateDidChangeNotification
-        audioRendererRateCancellable = NotificationCenter.default.publisher(for: name).sink { [weak self] _ in
-            guard let self else { return }
-            onRateChanged(audioSynchronizer.rate)
-        }
+        audioRendererRateCancellable = NotificationCenter.default
+            .publisher(for: name).sink { [weak self, weak audioSynchronizer] _ in
+                guard let self, let audioSynchronizer else { return }
+                onRateChanged(audioSynchronizer.rate)
+            }
     }
 
     private func cancelRateObservation() {
@@ -221,15 +225,26 @@ final class AudioSynchronizer {
             queue: queue
         ).sink { [weak self] time in
             guard let self else { return }
+            updateCurrentBufferIfNeeded(at: time)
             if let audioBuffersQueue, let audioSynchronizer, time >= audioBuffersQueue.duration {
                 onTimeChanged(audioBuffersQueue.duration)
                 audioSynchronizer.setRate(0.0, time: audioSynchronizer.currentTime())
                 onRateChanged(0.0)
                 onComplete()
+                invalidate()
             } else {
                 onTimeChanged(time)
             }
         }
+    }
+
+    private func updateCurrentBufferIfNeeded(at time: CMTime) {
+        guard let audioBuffersQueue,
+              let buffer = audioBuffersQueue.buffer(at: time),
+              buffer.presentationTimeStamp != currentSampleBufferTime else { return }
+        onSampleBufferChanged(buffer)
+        currentSampleBufferTime = buffer.presentationTimeStamp
+        audioBuffersQueue.removeBuffer(at: time)
     }
 
     private func cancelTimeObservation() {

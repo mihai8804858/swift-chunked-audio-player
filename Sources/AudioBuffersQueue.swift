@@ -3,9 +3,14 @@ import os
 
 final class AudioBuffersQueue {
     private let audioDescription: AudioStreamBasicDescription
+    private var allBuffers = OSAllocatedUnfairLock(initialState: [CMSampleBuffer]())
     private var buffers = OSAllocatedUnfairLock(initialState: [CMSampleBuffer]())
 
     private(set) var duration = CMTime.zero
+
+    var isEmpty: Bool {
+        buffers.withLock(\.isEmpty)
+    }
 
     init(audioDescription: AudioStreamBasicDescription) {
         self.audioDescription = audioDescription
@@ -25,6 +30,11 @@ final class AudioBuffersQueue {
         ) else { return }
         updateTimeOffset(for: buffer)
         buffers.withLock { $0.append(buffer) }
+        allBuffers.withLock { $0.append(buffer) }
+    }
+
+    func peek() -> CMSampleBuffer? {
+        buffers.withLock { $0.first }
     }
 
     func dequeue() -> CMSampleBuffer? {
@@ -34,9 +44,26 @@ final class AudioBuffersQueue {
         }
     }
 
+    func removeFirst() {
+        _ = dequeue()
+    }
+
     func removeAll() {
+        allBuffers.withLock { $0.removeAll() }
         buffers.withLock { $0.removeAll() }
         duration = .zero
+    }
+
+    func buffer(at time: CMTime) -> CMSampleBuffer? {
+        allBuffers.withLock { buffers in
+            buffers.first { $0.timeRange.containsTime(time) }
+        }
+    }
+
+    func removeBuffer(at time: CMTime) {
+        allBuffers.withLock { buffers in
+            buffers.removeAll { $0.timeRange.containsTime(time) }
+        }
     }
 
     // MARK: - Private
@@ -93,8 +120,6 @@ final class AudioBuffersQueue {
     }
 
     private func updateTimeOffset(for buffer: CMSampleBuffer) {
-        let bufferStartTime = CMSampleBufferGetOutputPresentationTimeStamp(buffer)
-        let bufferDuration = CMSampleBufferGetOutputDuration(buffer)
-        duration = bufferStartTime + bufferDuration
+        duration = buffer.presentationTimeStamp + buffer.duration
     }
 }
