@@ -28,8 +28,8 @@ public final class AudioPlayer: ObservableObject {
 
     public init(
       timeUpdateInterval: CMTime = CMTime(value: 1, timescale: 10),
-      didStartPlaying: @escaping @Sendable () -> Void,
-      didFinishPlaying: @escaping @Sendable () -> Void
+      didStartPlaying: @escaping @Sendable () -> Void = {},
+      didFinishPlaying: @escaping @Sendable () -> Void = {}
     ) {
         self.timeUpdateInterval = timeUpdateInterval
         self.didStartPlaying = didStartPlaying
