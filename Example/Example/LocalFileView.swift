@@ -104,15 +104,12 @@ struct LocalFileView: View {
 
     @ViewBuilder
     private var decibelsView: some View {
-        if let decibels = decibelsModel.decibels,
-           let decibelsFraction = decibelsModel.decibelsFraction {
-            VStack {
-                Text("Decibels: \(Int(decibels))")
-                ProgressView(value: decibelsFraction)
-                    .animation(.bouncy, value: decibelsFraction)
-            }
-            .frame(maxWidth: 200)
+        VStack {
+            Text("Decibels: \(Int(decibelsModel.decibels ?? 0))")
+            ProgressView(value: decibelsModel.decibelsFraction ?? 0)
+                .animation(.bouncy, value: decibelsModel.decibelsFraction)
         }
+        .frame(maxWidth: 200)
     }
 
     private func performConversion() {

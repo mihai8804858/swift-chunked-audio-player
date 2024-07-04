@@ -15,7 +15,7 @@ final class AudioFileStream {
     private let receiveASBD: ASBDCallback
     private let receivePackets: PacketsCallback
 
-    private let syncQueue = DispatchQueue(label: "com.audio-player.file-stream.queue", qos: .userInitiated)
+    private let lock = NSRecursiveLock()
 
     private(set) var audioStreamID: AudioFileStreamID?
     private(set) var fileTypeID: AudioFileTypeID?
@@ -34,7 +34,7 @@ final class AudioFileStream {
 
     @discardableResult
     func open() -> Self {
-        syncQueue.sync {
+        lock.withLock {
             let instance = UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
             let status = AudioFileStreamOpen(instance, { instance, _, propertyID, _ in
                 let stream = Unmanaged<AudioFileStream>.fromOpaque(instance).takeUnretainedValue()
@@ -56,14 +56,14 @@ final class AudioFileStream {
     }
 
     func close() {
-        syncQueue.sync {
+        lock.withLock {
             audioStreamID.flatMap { _ = AudioFileStreamClose($0) }
             audioStreamID = nil
         }
     }
 
     func parseData(_ data: Data) {
-        syncQueue.sync {
+        lock.withLock {
             guard let audioStreamID else { return }
             data.withUnsafeBytes { pointer in
                 guard let baseAddress = pointer.baseAddress else { return }
@@ -73,7 +73,7 @@ final class AudioFileStream {
     }
 
     func finishDataParsing() {
-        syncQueue.sync {
+        lock.withLock {
             guard let audioStreamID else { return }
             AudioFileStreamParseBytes(audioStreamID, 0, nil, [])
         }
