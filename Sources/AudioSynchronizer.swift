@@ -75,7 +75,8 @@ final class AudioSynchronizer {
                 numberOfPackets: numberOfPackets,
                 packets: packets
             )
-        }.open()
+        }
+        audioFileStream?.open()
     }
 
     func pause() {

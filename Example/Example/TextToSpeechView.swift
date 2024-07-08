@@ -12,7 +12,7 @@ struct Shake: GeometryEffect {
     }
 }
 
-struct SpeechToTextView: View {
+struct TextToSpeechView: View {
     private let api = OpenAI()
 
     @AppStorage("apiKey") private var apiKey: String = ""
@@ -246,5 +246,5 @@ struct SpeechToTextView: View {
 }
 
 #Preview {
-    SpeechToTextView()
+    TextToSpeechView()
 }

@@ -15,7 +15,7 @@ final class AudioFileStream {
     private let receiveASBD: ASBDCallback
     private let receivePackets: PacketsCallback
 
-    private let lock = NSRecursiveLock()
+    private let syncQueue = DispatchQueue(label: "com.audio-player.file-stream.queue", qos: .userInitiated)
 
     private(set) var audioStreamID: AudioFileStreamID?
     private(set) var fileTypeID: AudioFileTypeID?
@@ -32,9 +32,9 @@ final class AudioFileStream {
         self.receivePackets = receivePackets
     }
 
-    @discardableResult
-    func open() -> Self {
-        lock.withLock {
+    func open() {
+        syncQueue.async { [weak self] in
+            guard let self else { return }
             let instance = UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
             let status = AudioFileStreamOpen(instance, { instance, _, propertyID, _ in
                 let stream = Unmanaged<AudioFileStream>.fromOpaque(instance).takeUnretainedValue()
@@ -50,21 +50,20 @@ final class AudioFileStream {
             }, fileTypeID ?? 0, &audioStreamID )
             if status != noErr { receiveError(.status(status)) }
             if audioStreamID == nil { receiveError(.streamNotOpened) }
-
-            return self
         }
     }
 
     func close() {
-        lock.withLock {
-            audioStreamID.flatMap { _ = AudioFileStreamClose($0) }
+        syncQueue.async { [weak self] in
+            guard let self, let streamID = audioStreamID else { return }
+            AudioFileStreamClose(streamID)
             audioStreamID = nil
         }
     }
 
     func parseData(_ data: Data) {
-        lock.withLock {
-            guard let audioStreamID else { return }
+        syncQueue.async { [weak self] in
+            guard let self, let audioStreamID else { return }
             data.withUnsafeBytes { pointer in
                 guard let baseAddress = pointer.baseAddress else { return }
                 AudioFileStreamParseBytes(audioStreamID, UInt32(data.count), baseAddress, [])
@@ -73,8 +72,8 @@ final class AudioFileStream {
     }
 
     func finishDataParsing() {
-        lock.withLock {
-            guard let audioStreamID else { return }
+        syncQueue.async { [weak self] in
+            guard let self, let audioStreamID else { return }
             AudioFileStreamParseBytes(audioStreamID, 0, nil, [])
         }
     }
