@@ -1,6 +1,6 @@
 import AVFoundation
 
-#if swift(>=6.0)
+#if hasAttribute(retroactive)
 extension CMSampleBuffer: @unchecked @retroactive Sendable {}
 #else
 extension CMSampleBuffer: @unchecked Sendable {}
