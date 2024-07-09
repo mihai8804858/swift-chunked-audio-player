@@ -15,18 +15,21 @@ final class AudioFileStream {
     private let receiveASBD: ASBDCallback
     private let receivePackets: PacketsCallback
 
-    private let syncQueue = DispatchQueue(label: "com.audio-player.file-stream.queue", qos: .userInitiated)
+    private let syncQueue: DispatchQueue
 
     private(set) var audioStreamID: AudioFileStreamID?
     private(set) var fileTypeID: AudioFileTypeID?
+    private(set) var parsingComplete = false
 
     init(
         type: AudioFileTypeID? = nil,
+        queue: DispatchQueue,
         receiveError: @escaping ErrorCallback,
         receiveASBD: @escaping ASBDCallback,
         receivePackets: @escaping PacketsCallback
     ) {
         self.fileTypeID = type
+        self.syncQueue = queue
         self.receiveError = receiveError
         self.receiveASBD = receiveASBD
         self.receivePackets = receivePackets
@@ -75,6 +78,7 @@ final class AudioFileStream {
         syncQueue.async { [weak self] in
             guard let self, let audioStreamID else { return }
             AudioFileStreamParseBytes(audioStreamID, 0, nil, [])
+            parsingComplete = true
         }
     }
 

@@ -64,7 +64,7 @@ final class AudioSynchronizer {
 
     func prepare(type: AudioFileTypeID? = nil) {
         invalidate()
-        audioFileStream = AudioFileStream(type: type) { [weak self] error in
+        audioFileStream = AudioFileStream(type: type, queue: queue) { [weak self] error in
             self?.onError(error)
         } receiveASBD: { [weak self] asbd in
             self?.onFileStreamDescriptionReceived(asbd: asbd)
@@ -163,7 +163,7 @@ final class AudioSynchronizer {
     }
 
     private func provideMediaDataIfNeeded() {
-        guard let audioRenderer, let audioSynchronizer, let audioBuffersQueue else { return }
+        guard let audioRenderer, let audioSynchronizer, let audioBuffersQueue, let audioFileStream else { return }
         while let buffer = audioBuffersQueue.peek(), audioRenderer.isReadyForMoreMediaData {
             audioRenderer.enqueue(buffer)
             audioBuffersQueue.removeFirst()
@@ -172,7 +172,7 @@ final class AudioSynchronizer {
                 audioSynchronizer: audioSynchronizer
             )
         }
-        if audioBuffersQueue.isEmpty && receiveComplete {
+        if audioBuffersQueue.isEmpty && receiveComplete && audioFileStream.parsingComplete {
             audioRenderer.stopRequestingMediaData()
         }
     }
