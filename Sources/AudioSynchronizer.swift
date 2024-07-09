@@ -100,17 +100,25 @@ final class AudioSynchronizer {
         receiveComplete = true
     }
 
-    func invalidate() {
+    func invalidate(_ completion: @escaping () -> Void = {}) {
         removeBuffers()
         closeFileStream()
         cancelObservation()
         receiveComplete = false
-        audioRenderer.flatMap { audioSynchronizer?.removeRenderer($0, at: .zero) }
-        audioRenderer?.stopRequestingMediaData()
-        audioRenderer = nil
-        audioSynchronizer = nil
         currentSampleBufferTime = nil
         onSampleBufferChanged(nil)
+        if let audioSynchronizer, let audioRenderer {
+            audioRenderer.stopRequestingMediaData()
+            audioSynchronizer.removeRenderer(audioRenderer, at: .zero) { [weak self] _ in
+                self?.audioRenderer = nil
+                self?.audioSynchronizer = nil
+                completion()
+            }
+        } else {
+            audioRenderer = nil
+            audioSynchronizer = nil
+            completion()
+        }
     }
 
     // MARK: - Private
