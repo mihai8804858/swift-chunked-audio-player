@@ -163,25 +163,26 @@ final class AudioSynchronizer {
     }
 
     private func provideMediaDataIfNeeded() {
-        guard let audioRenderer, let audioSynchronizer, let audioBuffersQueue, let audioFileStream else { return }
+        guard let audioRenderer, let audioBuffersQueue, let audioFileStream else { return }
         while let buffer = audioBuffersQueue.peek(), audioRenderer.isReadyForMoreMediaData {
             audioRenderer.enqueue(buffer)
             audioBuffersQueue.removeFirst()
-            startPlaybackIfCan(
-                audioRenderer: audioRenderer,
-                audioSynchronizer: audioSynchronizer
-            )
+            startPlaybackIfCan()
         }
+        startPlaybackIfCan()
         if audioBuffersQueue.isEmpty && receiveComplete && audioFileStream.parsingComplete {
             audioRenderer.stopRequestingMediaData()
         }
     }
 
-    private func startPlaybackIfCan(
-        audioRenderer: AVSampleBufferAudioRenderer,
-        audioSynchronizer: AVSampleBufferRenderSynchronizer
-    ) {
-        guard audioRenderer.hasSufficientMediaDataForReliablePlaybackStart, audioSynchronizer.rate == 0 else { return }
+    private func startPlaybackIfCan() {
+        guard let audioRenderer,
+              let audioSynchronizer,
+              let audioFileStream,
+              audioSynchronizer.rate == 0 else { return }
+        let dataComplete = receiveComplete && audioFileStream.parsingComplete
+        let shouldStart = audioRenderer.hasSufficientMediaDataForReliablePlaybackStart || dataComplete
+        guard shouldStart else { return }
         audioSynchronizer.setRate(1.0, time: .zero)
         onPlaying()
     }
