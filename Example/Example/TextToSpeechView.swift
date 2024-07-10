@@ -18,7 +18,6 @@ struct TextToSpeechView: View {
     @AppStorage("apiKey") private var apiKey: String = ""
     @FocusState private var isFocused: Bool
     @StateObject private var player = AudioPlayer()
-    @StateObject private var decibelsModel = DecibelsViewModel()
 
     @State private var format = SpeechFormat.mp3
     @State private var voice = SpeechVoice.alloy
@@ -42,7 +41,6 @@ struct TextToSpeechView: View {
             inputTextField
             controlsView
             volumeView
-            decibelsView
         }
         .padding()
         .frame(maxHeight: .infinity)
@@ -81,17 +79,10 @@ struct TextToSpeechView: View {
             print("Error = \(error.flatMap { $0.debugDescription } ?? "nil")")
         }
         .onChange(of: player.currentTime) { _, time in
-            decibelsModel.setTime(time)
             print("Time = \(time.seconds)")
-        }
-        .onChange(of: player.state) { _, state in
-            handleState(state)
         }
         .onChange(of: player.rate) { _, rate in
             print("Rate = \(rate)")
-        }
-        .onChange(of: player.currentBuffer) { _, buffer in
-            decibelsModel.addBuffer(buffer)
         }
         #if os(iOS) || os(visionOS)
         .navigationBarTitleDisplayMode(.inline)
@@ -130,16 +121,6 @@ struct TextToSpeechView: View {
         VStack {
             Text("Volume: \(Int(player.volume * 100))")
             Slider(value: volumeBinding, in: 0...1, step: 0.01)
-        }
-        .frame(maxWidth: 200)
-    }
-
-    @ViewBuilder
-    private var decibelsView: some View {
-        VStack {
-            Text("Decibels: \(Int(decibelsModel.decibels ?? 0))")
-            ProgressView(value: decibelsModel.decibelsFraction ?? 0)
-                .animation(.bouncy, value: decibelsModel.decibelsFraction)
         }
         .frame(maxWidth: 200)
     }
@@ -231,16 +212,6 @@ struct TextToSpeechView: View {
         } else {
             errorMessage = nil
             didFail = false
-        }
-    }
-
-    private func handleState(_ state: AudioPlayerState) {
-        print("State = \(state)")
-        switch state {
-        case .initial, .completed, .failed:
-            decibelsModel.removeAll()
-        default:
-            break
         }
     }
 }

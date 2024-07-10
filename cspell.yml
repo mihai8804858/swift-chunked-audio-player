@@ -1,0 +1,13 @@
+files:
+  - Sources/**/*.swift
+  - Example/**/*.swift
+  - Package.swift
+  - README.md
+ignoreWords:
+  - asbd
+  - animatable
+  - unmanaged
+  - unretained
+  - xcprivacy
+  - autocorrection
+  - struct

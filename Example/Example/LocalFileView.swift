@@ -9,7 +9,6 @@ struct LocalFileView: View {
     private let chunkSize = 4096
 
     @StateObject private var player = AudioPlayer()
-    @StateObject private var decibelsModel = DecibelsViewModel()
 
     @State private var errorMessage: String?
     @State private var didFail = false
@@ -27,7 +26,6 @@ struct LocalFileView: View {
             pathLabel
             controlsView
             volumeView
-            decibelsView
         }
         .padding()
         .frame(maxHeight: .infinity)
@@ -49,17 +47,10 @@ struct LocalFileView: View {
             print("Error = \(error.flatMap { $0.debugDescription } ?? "nil")")
         }
         .onChange(of: player.currentTime) { _, time in
-            decibelsModel.setTime(time)
             print("Time = \(time.seconds)")
-        }
-        .onChange(of: player.state) { _, state in
-            handleState(state)
         }
         .onChange(of: player.rate) { _, rate in
             print("Rate = \(rate)")
-        }
-        .onChange(of: player.currentBuffer) { _, buffer in
-            decibelsModel.addBuffer(buffer)
         }
         #if os(iOS) || os(visionOS)
         .navigationBarTitleDisplayMode(.inline)
@@ -102,16 +93,6 @@ struct LocalFileView: View {
         .frame(maxWidth: 200)
     }
 
-    @ViewBuilder
-    private var decibelsView: some View {
-        VStack {
-            Text("Decibels: \(Int(decibelsModel.decibels ?? 0))")
-            ProgressView(value: decibelsModel.decibelsFraction ?? 0)
-                .animation(.bouncy, value: decibelsModel.decibelsFraction)
-        }
-        .frame(maxWidth: 200)
-    }
-
     private func performConversion() {
         player.start(makeSampleStream(), type: kAudioFileMP3Type)
     }
@@ -148,16 +129,6 @@ struct LocalFileView: View {
         } else {
             errorMessage = nil
             didFail = false
-        }
-    }
-
-    private func handleState(_ state: AudioPlayerState) {
-        print("State = \(state)")
-        switch state {
-        case .initial, .completed, .failed:
-            decibelsModel.removeAll()
-        default:
-            break
         }
     }
 }

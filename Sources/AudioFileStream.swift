@@ -36,32 +36,27 @@ final class AudioFileStream {
     }
 
     func open() {
-        syncQueue.async { [weak self] in
-            guard let self else { return }
-            let instance = UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
-            let status = AudioFileStreamOpen(instance, { instance, _, propertyID, _ in
-                let stream = Unmanaged<AudioFileStream>.fromOpaque(instance).takeUnretainedValue()
-                stream.onFileStreamPropertyReceived(propertyID: propertyID)
-            }, { instance, numberBytes, numberPackets, bytes, packets in
-                let stream = Unmanaged<AudioFileStream>.fromOpaque(instance).takeUnretainedValue()
-                stream.onFileStreamPacketsReceived(
-                    numberOfBytes: numberBytes,
-                    bytes: bytes,
-                    numberOfPackets: numberPackets,
-                    packets: packets
-                )
-            }, fileTypeID ?? 0, &audioStreamID )
-            if status != noErr { receiveError(.status(status)) }
-            if audioStreamID == nil { receiveError(.streamNotOpened) }
-        }
+        let instance = UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
+        let status = AudioFileStreamOpen(instance, { instance, _, propertyID, _ in
+            let stream = Unmanaged<AudioFileStream>.fromOpaque(instance).takeUnretainedValue()
+            stream.onFileStreamPropertyReceived(propertyID: propertyID)
+        }, { instance, numberBytes, numberPackets, bytes, packets in
+            let stream = Unmanaged<AudioFileStream>.fromOpaque(instance).takeUnretainedValue()
+            stream.onFileStreamPacketsReceived(
+                numberOfBytes: numberBytes,
+                bytes: bytes,
+                numberOfPackets: numberPackets,
+                packets: packets
+            )
+        }, fileTypeID ?? 0, &audioStreamID )
+        if status != noErr { receiveError(.status(status)) }
+        if audioStreamID == nil { receiveError(.streamNotOpened) }
     }
 
     func close() {
-        syncQueue.async { [weak self] in
-            guard let self, let streamID = audioStreamID else { return }
-            AudioFileStreamClose(streamID)
-            audioStreamID = nil
-        }
+        guard let streamID = audioStreamID else { return }
+        AudioFileStreamClose(streamID)
+        audioStreamID = nil
     }
 
     func parseData(_ data: Data) {
