@@ -5,6 +5,7 @@ import Combine
 final class AudioSynchronizer {
     typealias RateCallback = (_ time: Float) -> Void
     typealias TimeCallback = (_ time: CMTime) -> Void
+    typealias DurationCallback = (_ duration: CMTime) -> Void
     typealias ErrorCallback = (_ error: AudioPlayerError?) -> Void
     typealias CompleteCallback = () -> Void
     typealias PlayingCallback = () -> Void
@@ -14,6 +15,7 @@ final class AudioSynchronizer {
     private let queue = DispatchQueue(label: "audio.player.queue")
     private let onRateChanged: RateCallback
     private let onTimeChanged: TimeCallback
+    private let onDurationChanged: DurationCallback
     private let onError: ErrorCallback
     private let onComplete: CompleteCallback
     private let onPlaying: PlayingCallback
@@ -46,6 +48,7 @@ final class AudioSynchronizer {
         timeUpdateInterval: CMTime,
         onRateChanged: @escaping RateCallback = { _ in },
         onTimeChanged: @escaping TimeCallback = { _ in },
+        onDurationChanged: @escaping DurationCallback = { _ in },
         onError: @escaping ErrorCallback = { _ in },
         onComplete: @escaping CompleteCallback = {},
         onPlaying: @escaping PlayingCallback = {},
@@ -55,6 +58,7 @@ final class AudioSynchronizer {
         self.timeUpdateInterval = timeUpdateInterval
         self.onRateChanged = onRateChanged
         self.onTimeChanged = onTimeChanged
+        self.onDurationChanged = onDurationChanged
         self.onError = onError
         self.onComplete = onComplete
         self.onPlaying = onPlaying
@@ -167,6 +171,7 @@ final class AudioSynchronizer {
         while let buffer = audioBuffersQueue.peek(), audioRenderer.isReadyForMoreMediaData {
             audioRenderer.enqueue(buffer)
             audioBuffersQueue.removeFirst()
+            onDurationChanged(audioBuffersQueue.duration)
             startPlaybackIfCan()
         }
         startPlaybackIfCan()

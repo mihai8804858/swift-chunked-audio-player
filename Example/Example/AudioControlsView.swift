@@ -27,7 +27,7 @@ struct AudioPlayPauseButton: View {
     }
 
     private var image: Image {
-        switch player.state {
+        switch player.currentState {
         case .initial, .failed, .completed, .paused: Image(systemName: "play.fill")
         case .playing: Image(systemName: "pause.fill")
         }
@@ -76,7 +76,7 @@ struct AudioControlsView: View {
                 .padding()
                 .font(.headline.monospaced())
                 .fontWeight(.bold)
-            switch player.state {
+            switch player.currentState {
             case .initial, .completed, .failed:
                 EmptyView()
             case .playing, .paused:

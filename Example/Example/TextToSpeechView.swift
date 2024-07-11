@@ -74,14 +74,17 @@ struct TextToSpeechView: View {
                     #endif
             }
         }
-        .onChange(of: player.error) { _, error in
+        .onChange(of: player.currentError) { _, error in
             handleError(error)
             print("Error = \(error.flatMap { $0.debugDescription } ?? "nil")")
         }
         .onChange(of: player.currentTime) { _, time in
             print("Time = \(time.seconds)")
         }
-        .onChange(of: player.rate) { _, rate in
+        .onChange(of: player.currentDuration) { _, duration in
+            print("Duration = \(duration.seconds)")
+        }
+        .onChange(of: player.currentRate) { _, rate in
             print("Rate = \(rate)")
         }
         #if os(iOS) || os(visionOS)
@@ -106,7 +109,7 @@ struct TextToSpeechView: View {
     @ViewBuilder
     private var controlsView: some View {
         AudioControlsView(player: player) {
-            switch player.state {
+            switch player.currentState {
             case .initial, .failed, .completed: performConversion()
             case .playing: player.pause()
             case .paused: player.resume()

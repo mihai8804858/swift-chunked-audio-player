@@ -10,10 +10,11 @@ public final class AudioPlayer: ObservableObject {
     private let didStartPlaying: @Sendable () -> Void
     private let didFinishPlaying: @Sendable () -> Void
 
-    @Published public private(set) var error: AudioPlayerError?
-    @Published public private(set) var state = AudioPlayerState.initial
-    @Published public private(set) var rate = Float.zero
+    @Published public private(set) var currentError: AudioPlayerError?
+    @Published public private(set) var currentState = AudioPlayerState.initial
+    @Published public private(set) var currentRate = Float.zero
     @Published public private(set) var currentTime = CMTime.zero
+    @Published public private(set) var currentDuration = CMTime.zero
     @Published public private(set) var currentBuffer: CMSampleBuffer?
 
     public var volume: Float {
@@ -54,6 +55,7 @@ public final class AudioPlayer: ObservableObject {
         cancelDataTask()
         cancelSynchronizer()
         setTime(.zero)
+        setDuration(.zero)
         setRate(.zero)
         setError(nil)
         setState(.initial)
@@ -100,6 +102,8 @@ public final class AudioPlayer: ObservableObject {
             self?.setRate(rate)
         } onTimeChanged: { [weak self] time in
             self?.setTime(time)
+        } onDurationChanged: { [weak self] duration in
+            self?.setDuration(duration)
         } onError: { [weak self] error in
             self?.setError(error)
             self?.didFinishPlaying()
@@ -119,34 +123,44 @@ public final class AudioPlayer: ObservableObject {
 
     private func setRate(_ rate: Float) {
         DispatchQueue.main.async { [weak self] in
-            self?.rate = rate
+            guard let self, currentRate != rate else { return }
+            currentRate = rate
         }
     }
 
     private func setState(_ state: AudioPlayerState) {
         DispatchQueue.main.async { [weak self] in
-            self?.state = state
+            guard let self, currentState != state else { return }
+            currentState = state
         }
     }
 
     private func setError(_ error: AudioPlayerError?) {
         DispatchQueue.main.async { [weak self] in
-            self?.error = error
-            if error != nil {
-                self?.state = .failed
-            }
+            guard let self else { return }
+            currentError = error
+            if error != nil { currentState = .failed }
         }
     }
 
     private func setTime(_ time: CMTime) {
         DispatchQueue.main.async { [weak self] in
-            self?.currentTime = time
+            guard let self, currentTime != time else { return }
+            currentTime = time
+        }
+    }
+
+    private func setDuration(_ duration: CMTime) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self, currentDuration != duration else { return }
+            currentDuration = duration
         }
     }
 
     private func setCurrentBuffer(_ buffer: CMSampleBuffer?) {
         DispatchQueue.main.async { [weak self] in
-            self?.currentBuffer = buffer
+            guard let self else { return }
+            currentBuffer = buffer
         }
     }
 }
