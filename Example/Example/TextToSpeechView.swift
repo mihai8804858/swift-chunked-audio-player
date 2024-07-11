@@ -1,4 +1,5 @@
 import SwiftUI
+import CoreMedia
 import ChunkedAudioPlayer
 
 struct Shake: GeometryEffect {
@@ -116,6 +117,10 @@ struct TextToSpeechView: View {
             }
         } onStop: {
             player.stop()
+        } onRewind: {
+            player.rewind(CMTime(seconds: 5.0, preferredTimescale: player.currentTime.timescale))
+        } onForward: {
+            player.forward(CMTime(seconds: 5.0, preferredTimescale: player.currentTime.timescale))
         }
     }
 

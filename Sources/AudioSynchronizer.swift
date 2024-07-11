@@ -84,15 +84,38 @@ final class AudioSynchronizer {
     }
 
     func pause() {
-        guard let audioSynchronizer else { return }
-        audioSynchronizer.setRate(0.0, time: audioSynchronizer.currentTime())
+        guard let audioSynchronizer, audioSynchronizer.rate != 0.0 else { return }
+        audioSynchronizer.rate = 0.0
         onPaused()
     }
 
     func resume() {
-        guard let audioSynchronizer else { return }
-        audioSynchronizer.setRate(1.0, time: audioSynchronizer.currentTime())
+        guard let audioSynchronizer, audioSynchronizer.rate == 0.0 else { return }
+        audioSynchronizer.rate = 1.0
         onPlaying()
+    }
+
+    func rewind(_ time: CMTime) {
+        guard let audioSynchronizer else { return }
+        seek(to: audioSynchronizer.currentTime() - time)
+    }
+
+    func forward(_ time: CMTime) {
+        guard let audioSynchronizer else { return }
+        seek(to: audioSynchronizer.currentTime() + time)
+    }
+
+    func seek(to time: CMTime) {
+        guard let audioSynchronizer, let audioRenderer, let audioBuffersQueue else { return }
+        let range = CMTimeRange(start: .zero, duration: audioBuffersQueue.duration)
+        let clampedTime = time.clamped(to: range)
+        let currentRate = audioSynchronizer.rate
+        audioSynchronizer.rate = 0.0
+        audioRenderer.stopRequestingMediaData()
+        audioRenderer.flush()
+        audioBuffersQueue.flush()
+        audioBuffersQueue.seek(to: clampedTime)
+        restartRequestingMediaData(audioRenderer, from: clampedTime, rate: currentRate)
     }
 
     func receive(data: Data) {
@@ -134,7 +157,8 @@ final class AudioSynchronizer {
         audioRenderer = renderer
         audioSynchronizer = synchronizer
         audioBuffersQueue = AudioBuffersQueue(audioDescription: asbd)
-        startRequestingMediaData(audioRenderer: renderer, audioSynchronizer: synchronizer)
+        observeRenderer(renderer, synchronizer: synchronizer)
+        startRequestingMediaData(renderer)
     }
 
     private func onFileStreamPacketsReceived(
@@ -156,40 +180,57 @@ final class AudioSynchronizer {
         }
     }
 
-    private func startRequestingMediaData(
-        audioRenderer: AVSampleBufferAudioRenderer,
-        audioSynchronizer: AVSampleBufferRenderSynchronizer
-    ) {
-        observeRenderer(audioRenderer, synchronizer: audioSynchronizer)
-        audioRenderer.requestMediaDataWhenReady(on: queue) { [weak self] in
-            self?.provideMediaDataIfNeeded()
+    private func startRequestingMediaData(_ renderer: AVSampleBufferAudioRenderer) {
+        var didStart = false
+        renderer.requestMediaDataWhenReady(on: queue) { [weak self] in
+            guard let self, let audioRenderer, let audioBuffersQueue else { return }
+            while let buffer = audioBuffersQueue.peek(), audioRenderer.isReadyForMoreMediaData {
+                audioRenderer.enqueue(buffer)
+                audioBuffersQueue.removeFirst()
+                onDurationChanged(audioBuffersQueue.duration)
+                startPlaybackIfNeeded(didStart: &didStart)
+            }
+            startPlaybackIfNeeded(didStart: &didStart)
+            stopRequestingMediaDataIfNeeded()
         }
     }
 
-    private func provideMediaDataIfNeeded() {
-        guard let audioRenderer, let audioBuffersQueue, let audioFileStream else { return }
-        while let buffer = audioBuffersQueue.peek(), audioRenderer.isReadyForMoreMediaData {
-            audioRenderer.enqueue(buffer)
-            audioBuffersQueue.removeFirst()
-            onDurationChanged(audioBuffersQueue.duration)
-            startPlaybackIfCan()
-        }
-        startPlaybackIfCan()
-        if audioBuffersQueue.isEmpty && receiveComplete && audioFileStream.parsingComplete {
-            audioRenderer.stopRequestingMediaData()
+    private func restartRequestingMediaData(_ renderer: AVSampleBufferAudioRenderer, from time: CMTime, rate: Float) {
+        var didStart = false
+        renderer.requestMediaDataWhenReady(on: queue) { [weak self] in
+            guard let self, let audioRenderer, let audioSynchronizer, let audioBuffersQueue else { return }
+            while let buffer = audioBuffersQueue.peek(), audioRenderer.isReadyForMoreMediaData {
+                audioRenderer.enqueue(buffer)
+                audioBuffersQueue.removeFirst()
+                onDurationChanged(audioBuffersQueue.duration)
+            }
+            if !didStart {
+                audioSynchronizer.setRate(rate, time: time)
+                didStart = true
+            }
+            stopRequestingMediaDataIfNeeded()
         }
     }
 
-    private func startPlaybackIfCan() {
+    private func startPlaybackIfNeeded(didStart: inout Bool) {
         guard let audioRenderer,
               let audioSynchronizer,
               let audioFileStream,
-              audioSynchronizer.rate == 0 else { return }
+              audioSynchronizer.rate == 0,
+              !didStart else { return }
         let dataComplete = receiveComplete && audioFileStream.parsingComplete
         let shouldStart = audioRenderer.hasSufficientMediaDataForReliablePlaybackStart || dataComplete
         guard shouldStart else { return }
         audioSynchronizer.setRate(1.0, time: .zero)
+        didStart = true
         onPlaying()
+    }
+
+    private func stopRequestingMediaDataIfNeeded() {
+        guard let audioRenderer, let audioBuffersQueue, let audioFileStream else { return }
+        if audioBuffersQueue.isEmpty && receiveComplete && audioFileStream.parsingComplete {
+            audioRenderer.stopRequestingMediaData()
+        }
     }
 
     private func closeFileStream() {
@@ -259,7 +300,6 @@ final class AudioSynchronizer {
               buffer.presentationTimeStamp != currentSampleBufferTime else { return }
         onSampleBufferChanged(buffer)
         currentSampleBufferTime = buffer.presentationTimeStamp
-        audioBuffersQueue.removeBuffer(at: time)
     }
 
     private func cancelTimeObservation() {

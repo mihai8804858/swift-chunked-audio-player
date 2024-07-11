@@ -3,13 +3,14 @@ import os
 
 final class AudioBuffersQueue {
     private let audioDescription: AudioStreamBasicDescription
-    private var allBuffers = OSAllocatedUnfairLock(initialState: [CMSampleBuffer]())
-    private var buffers = OSAllocatedUnfairLock(initialState: [CMSampleBuffer]())
+    private var allBuffers = [CMSampleBuffer]()
+    private var buffers = [CMSampleBuffer]()
+    private let lock = NSLock()
 
     private(set) var duration = CMTime.zero
 
     var isEmpty: Bool {
-        buffers.withLock(\.isEmpty)
+        withLock { buffers.isEmpty }
     }
 
     init(audioDescription: AudioStreamBasicDescription) {
@@ -23,22 +24,24 @@ final class AudioBuffersQueue {
         numberOfPackets: UInt32,
         packets: UnsafeMutablePointer<AudioStreamPacketDescription>?
     ) throws {
-        guard let buffer = try makeSampleBuffer(
-            from: Data(bytes: bytes, count: Int(numberOfBytes)),
-            packetCount: numberOfPackets,
-            packetDescriptions: packets
-        ) else { return }
-        updateTimeOffset(for: buffer)
-        buffers.withLock { $0.append(buffer) }
-        allBuffers.withLock { $0.append(buffer) }
+        try withLock {
+            guard let buffer = try makeSampleBuffer(
+                from: Data(bytes: bytes, count: Int(numberOfBytes)),
+                packetCount: numberOfPackets,
+                packetDescriptions: packets
+            ) else { return }
+            updateDuration(for: buffer)
+            buffers.append(buffer)
+            allBuffers.append(buffer)
+        }
     }
 
     func peek() -> CMSampleBuffer? {
-        buffers.withLock { $0.first }
+        withLock { buffers.first }
     }
 
     func dequeue() -> CMSampleBuffer? {
-        buffers.withLock { buffers in
+        withLock {
             if buffers.isEmpty { return nil }
             return buffers.removeFirst()
         }
@@ -49,20 +52,27 @@ final class AudioBuffersQueue {
     }
 
     func removeAll() {
-        allBuffers.withLock { $0.removeAll() }
-        buffers.withLock { $0.removeAll() }
-        duration = .zero
-    }
-
-    func buffer(at time: CMTime) -> CMSampleBuffer? {
-        allBuffers.withLock { buffers in
-            buffers.first { $0.timeRange.containsTime(time) }
+        withLock {
+            allBuffers.removeAll()
+            buffers.removeAll()
+            duration = .zero
         }
     }
 
-    func removeBuffer(at time: CMTime) {
-        allBuffers.withLock { buffers in
-            buffers.removeAll { $0.timeRange.containsTime(time) }
+    func buffer(at time: CMTime) -> CMSampleBuffer? {
+        withLock { allBuffers.first { $0.timeRange.containsTime(time) } }
+    }
+
+    func flush() {
+        withLock { buffers.removeAll() }
+    }
+
+    func seek(to time: CMTime) {
+        withLock {
+            guard let index = allBuffers.enumerated().first(where: { _, buffer in
+                buffer.timeRange.containsTime(time)
+            })?.offset else { return }
+            buffers = Array(allBuffers[index...])
         }
     }
 
@@ -119,7 +129,13 @@ final class AudioBuffersQueue {
         }
     }
 
-    private func updateTimeOffset(for buffer: CMSampleBuffer) {
+    private func updateDuration(for buffer: CMSampleBuffer) {
         duration = buffer.presentationTimeStamp + buffer.duration
+    }
+
+    private func withLock<T>(_ perform: () throws -> T) rethrows -> T {
+        lock.lock()
+        defer { lock.unlock() }
+        return try perform()
     }
 }

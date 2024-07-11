@@ -54,11 +54,11 @@ public final class AudioPlayer: ObservableObject {
     public func stop() {
         cancelDataTask()
         cancelSynchronizer()
-        setTime(.zero)
-        setDuration(.zero)
-        setRate(.zero)
-        setError(nil)
-        setState(.initial)
+        setCurrentTime(.zero)
+        setCurrentDuration(.zero)
+        setCurrentRate(.zero)
+        setCurrentError(nil)
+        setCurrentState(.initial)
         setCurrentBuffer(nil)
     }
 
@@ -68,6 +68,18 @@ public final class AudioPlayer: ObservableObject {
 
     public func resume() {
         synchronizer?.resume()
+    }
+
+    public func rewind(_ time: CMTime) {
+        synchronizer?.rewind(time)
+    }
+
+    public func forward(_ time: CMTime) {
+        synchronizer?.forward(time)
+    }
+
+    public func seek(to time: CMTime) {
+        synchronizer?.seek(to: time)
     }
 
     // MARK: - Private
@@ -87,7 +99,7 @@ public final class AudioPlayer: ObservableObject {
                 }
                 synchronizer?.finish()
             } catch {
-                setError(AudioPlayerError(error: error))
+                setCurrentError(AudioPlayerError(error: error))
             }
         }
     }
@@ -99,43 +111,43 @@ public final class AudioPlayer: ObservableObject {
 
     private func prepareSynchronizer(type: AudioFileTypeID?) {
         synchronizer = AudioSynchronizer(timeUpdateInterval: timeUpdateInterval) { [weak self] rate in
-            self?.setRate(rate)
+            self?.setCurrentRate(rate)
         } onTimeChanged: { [weak self] time in
-            self?.setTime(time)
+            self?.setCurrentTime(time)
         } onDurationChanged: { [weak self] duration in
-            self?.setDuration(duration)
+            self?.setCurrentDuration(duration)
         } onError: { [weak self] error in
-            self?.setError(error)
+            self?.setCurrentError(error)
             self?.didFinishPlaying()
         } onComplete: { [weak self] in
-            self?.setState(.completed)
+            self?.setCurrentState(.completed)
             self?.didFinishPlaying()
         } onPlaying: { [weak self] in
-            self?.setState(.playing)
+            self?.setCurrentState(.playing)
             self?.didStartPlaying()
         } onPaused: { [weak self] in
-            self?.setState(.paused)
+            self?.setCurrentState(.paused)
         } onSampleBufferChanged: { [weak self] buffer in
             self?.setCurrentBuffer(buffer)
         }
         synchronizer?.prepare(type: type)
     }
 
-    private func setRate(_ rate: Float) {
+    private func setCurrentRate(_ rate: Float) {
         DispatchQueue.main.async { [weak self] in
             guard let self, currentRate != rate else { return }
             currentRate = rate
         }
     }
 
-    private func setState(_ state: AudioPlayerState) {
+    private func setCurrentState(_ state: AudioPlayerState) {
         DispatchQueue.main.async { [weak self] in
             guard let self, currentState != state else { return }
             currentState = state
         }
     }
 
-    private func setError(_ error: AudioPlayerError?) {
+    private func setCurrentError(_ error: AudioPlayerError?) {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             currentError = error
@@ -143,14 +155,14 @@ public final class AudioPlayer: ObservableObject {
         }
     }
 
-    private func setTime(_ time: CMTime) {
+    private func setCurrentTime(_ time: CMTime) {
         DispatchQueue.main.async { [weak self] in
             guard let self, currentTime != time else { return }
             currentTime = time
         }
     }
 
-    private func setDuration(_ duration: CMTime) {
+    private func setCurrentDuration(_ duration: CMTime) {
         DispatchQueue.main.async { [weak self] in
             guard let self, currentDuration != duration else { return }
             currentDuration = duration

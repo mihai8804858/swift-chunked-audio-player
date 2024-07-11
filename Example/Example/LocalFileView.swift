@@ -1,4 +1,5 @@
 import AudioToolbox
+import CoreMedia
 import Combine
 import SwiftUI
 import ChunkedAudioPlayer
@@ -84,6 +85,10 @@ struct LocalFileView: View {
             }
         } onStop: {
             player.stop()
+        } onRewind: {
+            player.rewind(CMTime(seconds: 5.0, preferredTimescale: player.currentTime.timescale))
+        } onForward: {
+            player.forward(CMTime(seconds: 5.0, preferredTimescale: player.currentTime.timescale))
         }
     }
 

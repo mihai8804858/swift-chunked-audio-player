@@ -1,19 +1,30 @@
 import SwiftUI
 import ChunkedAudioPlayer
 
-struct AudioButtonStyle: ButtonStyle {
+struct AudioControlButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled: Bool
+
     func makeBody(configuration: Configuration) -> some View {
         configuration
             .label
             .font(.system(size: 20))
             .frame(width: 48, height: 48)
-            .foregroundStyle(.primary)
+            .foregroundStyle(.primary.opacity(isEnabled ? 1.0 : 0.3))
     }
 }
 
-struct AudioPlayPauseButton: View {
-    let player: AudioPlayer
+struct AudioControlButton: View {
+    let image: () -> Image
     let onTap: () -> Void
+
+    init(image: @escaping () -> Image, onTap: @escaping () -> Void) {
+        self.image = image
+        self.onTap = onTap
+    }
+
+    init(image: Image, onTap: @escaping () -> Void) {
+        self.init(image: { image }, onTap: onTap)
+    }
 
     var body: some View {
         Button {
@@ -21,73 +32,74 @@ struct AudioPlayPauseButton: View {
                 onTap()
             }
         } label: {
-            image.contentTransition(.symbolEffect(.replace))
-        }
-        .buttonStyle(AudioButtonStyle())
-    }
-
-    private var image: Image {
-        switch player.currentState {
-        case .initial, .failed, .completed, .paused: Image(systemName: "play.fill")
-        case .playing: Image(systemName: "pause.fill")
-        }
-    }
-}
-
-struct AudioStopButton: View {
-    let player: AudioPlayer
-    let onTap: () -> Void
-
-    var body: some View {
-        Button {
-            withAnimation {
-                onTap()
-            }
-        } label: {
-            Image(systemName: "stop.fill")
+            image()
                 .contentTransition(.symbolEffect(.replace))
         }
-        .buttonStyle(AudioButtonStyle())
+        .buttonStyle(AudioControlButtonStyle())
     }
 }
 
 struct AudioControlsView: View {
-    let timeFormat = Duration.UnitsFormatStyle(
-        allowedUnits: [.hours, .minutes, .seconds],
-        width: .narrow
-    )
+    let timeFormat = Duration.TimeFormatStyle(pattern: .minuteSecond(padMinuteToLength: 2))
 
-    let player: AudioPlayer
+    @StateObject var player: AudioPlayer
     let onPlayPause: () -> Void
     let onStop: () -> Void
+    let onRewind: () -> Void
+    let onForward: () -> Void
 
-    var duration: Duration {
+    private var currentTime: Duration {
         Duration.seconds(player.currentTime.seconds)
     }
 
-    var formattedTime: String {
-        duration.formatted(timeFormat)
+    private var currentDuration: Duration {
+        Duration.seconds(player.currentDuration.seconds)
+    }
+
+    private var formattedTime: String {
+        currentTime.formatted(timeFormat) + " / " + currentDuration.formatted(timeFormat)
     }
 
     var body: some View {
         HStack {
-            AudioPlayPauseButton(player: player, onTap: onPlayPause)
+            AudioControlButton(image: Image(systemName: "gobackward.5"), onTap: onRewind)
+                .disabled(!player.currentState.isActive)
+            AudioControlButton(image: {
+                switch player.currentState {
+                case .initial, .failed, .completed, .paused: Image(systemName: "play.fill")
+                case .playing: Image(systemName: "pause.fill")
+                }
+            }, onTap: onPlayPause)
             Text(formattedTime)
                 .padding()
                 .font(.headline.monospaced())
                 .fontWeight(.bold)
-            switch player.currentState {
-            case .initial, .completed, .failed:
-                EmptyView()
-            case .playing, .paused:
-                AudioStopButton(player: player, onTap: onStop)
-            }
+                .foregroundStyle(Color.primary.opacity(player.currentState.isActive ? 1.0 : 0.3))
+            AudioControlButton(image: Image(systemName: "stop.fill"), onTap: onStop)
+                .disabled(!player.currentState.isActive)
+            AudioControlButton(image: Image(systemName: "goforward.5"), onTap: onForward)
+                .disabled(!player.currentState.isActive)
         }
-        .background(Color.gray)
+        .background(Color(UIColor.secondarySystemBackground))
         .clipShape(Capsule())
     }
 }
 
+private extension AudioPlayerState {
+    var isActive: Bool {
+        switch self {
+        case .playing, .paused: true
+        case .initial, .completed, .failed: false
+        }
+    }
+}
+
 #Preview {
-    AudioControlsView(player: AudioPlayer(), onPlayPause: {}, onStop: {})
+    AudioControlsView(
+        player: AudioPlayer(),
+        onPlayPause: {},
+        onStop: {},
+        onRewind: {},
+        onForward: {}
+    )
 }

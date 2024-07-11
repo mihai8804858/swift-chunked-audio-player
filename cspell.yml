@@ -11,3 +11,5 @@ ignoreWords:
   - xcprivacy
   - autocorrection
   - struct
+  - gobackward
+  - goforward
