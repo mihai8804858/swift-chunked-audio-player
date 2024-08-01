@@ -117,15 +117,6 @@ public final class AudioPlayer: ObservableObject {
         } onDurationChanged: { [weak self] duration in
             self?.setCurrentDuration(duration)
         } onError: { [weak self] error in
-<<<<<<< HEAD
-            self?.setError(error)
-          self?.didFinishPlaying()
-        } onComplete: { [weak self] in
-            self?.setState(.completed)
-            self?.didFinishPlaying()
-        } onPlaying: { [weak self] in
-            self?.setState(.playing)
-=======
             self?.setCurrentError(error)
             self?.didFinishPlaying()
         } onComplete: { [weak self] in
@@ -133,7 +124,6 @@ public final class AudioPlayer: ObservableObject {
             self?.didFinishPlaying()
         } onPlaying: { [weak self] in
             self?.setCurrentState(.playing)
->>>>>>> upstream/main
             self?.didStartPlaying()
         } onPaused: { [weak self] in
             self?.setCurrentState(.paused)
