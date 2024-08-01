@@ -312,7 +312,7 @@ final class AudioSynchronizer {
 
     private func observeError(_ audioRenderer: AVSampleBufferAudioRenderer) {
         cancelErrorObservation()
-        audioRendererErrorCancellable = audioRenderer.publisher(for: \.error).sink { [weak self] error in
+        audioRendererErrorCancellable = audioRenderer.publisher(for: \.error).filter({ $0 != nil }).sink { [weak self] error in
             guard let self else { return }
             onError(error.flatMap(AudioPlayerError.init))
         }
