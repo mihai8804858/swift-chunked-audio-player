@@ -4,7 +4,7 @@ struct RootView: View {
     var body: some View {
         TabView {
             NavigationStack {
-                SpeechToTextView()
+                TextToSpeechView()
             }.tabItem {
                 Label("Remote", systemImage: "network")
             }

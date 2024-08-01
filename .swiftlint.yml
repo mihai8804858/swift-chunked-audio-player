@@ -5,3 +5,5 @@ included:
   - Package.swift
 excluded:
   - .build
+type_body_length:
+  - 500

@@ -1,4 +1,5 @@
 import AudioToolbox
+import CoreMedia
 import Combine
 import SwiftUI
 import ChunkedAudioPlayer
@@ -9,7 +10,6 @@ struct LocalFileView: View {
     private let chunkSize = 4096
 
     @StateObject private var player = AudioPlayer()
-    @StateObject private var decibelsModel = DecibelsViewModel()
 
     @State private var errorMessage: String?
     @State private var didFail = false
@@ -27,7 +27,6 @@ struct LocalFileView: View {
             pathLabel
             controlsView
             volumeView
-            decibelsView
         }
         .padding()
         .frame(maxHeight: .infinity)
@@ -44,22 +43,18 @@ struct LocalFileView: View {
         } message: {
             Text(errorMessage ?? "")
         }
-        .onChange(of: player.error) { _, error in
+        .onChange(of: player.currentError) { _, error in
             handleError(error)
             print("Error = \(error.flatMap { $0.debugDescription } ?? "nil")")
         }
         .onChange(of: player.currentTime) { _, time in
-            decibelsModel.setTime(time)
             print("Time = \(time.seconds)")
         }
-        .onChange(of: player.state) { _, state in
-            handleState(state)
+        .onChange(of: player.currentDuration) { _, duration in
+            print("Duration = \(duration.seconds)")
         }
-        .onChange(of: player.rate) { _, rate in
+        .onChange(of: player.currentRate) { _, rate in
             print("Rate = \(rate)")
-        }
-        .onChange(of: player.currentBuffer) { _, buffer in
-            decibelsModel.addBuffer(buffer)
         }
         #if os(iOS) || os(visionOS)
         .navigationBarTitleDisplayMode(.inline)
@@ -83,13 +78,17 @@ struct LocalFileView: View {
     @ViewBuilder
     private var controlsView: some View {
         AudioControlsView(player: player) {
-            switch player.state {
+            switch player.currentState {
             case .initial, .failed, .completed: performConversion()
             case .playing: player.pause()
             case .paused: player.resume()
             }
         } onStop: {
             player.stop()
+        } onRewind: {
+            player.rewind(CMTime(seconds: 5.0, preferredTimescale: player.currentTime.timescale))
+        } onForward: {
+            player.forward(CMTime(seconds: 5.0, preferredTimescale: player.currentTime.timescale))
         }
     }
 
@@ -100,19 +99,6 @@ struct LocalFileView: View {
             Slider(value: volumeBinding, in: 0...1, step: 0.01)
         }
         .frame(maxWidth: 200)
-    }
-
-    @ViewBuilder
-    private var decibelsView: some View {
-        if let decibels = decibelsModel.decibels,
-           let decibelsFraction = decibelsModel.decibelsFraction {
-            VStack {
-                Text("Decibels: \(Int(decibels))")
-                ProgressView(value: decibelsFraction)
-                    .animation(.bouncy, value: decibelsFraction)
-            }
-            .frame(maxWidth: 200)
-        }
     }
 
     private func performConversion() {
@@ -151,16 +137,6 @@ struct LocalFileView: View {
         } else {
             errorMessage = nil
             didFail = false
-        }
-    }
-
-    private func handleState(_ state: AudioPlayerState) {
-        print("State = \(state)")
-        switch state {
-        case .initial, .completed, .failed:
-            decibelsModel.removeAll()
-        default:
-            break
         }
     }
 }

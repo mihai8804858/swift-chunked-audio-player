@@ -15,56 +15,53 @@ final class AudioFileStream {
     private let receiveASBD: ASBDCallback
     private let receivePackets: PacketsCallback
 
-    private let syncQueue = DispatchQueue(label: "com.audio-player.file-stream.queue", qos: .userInitiated)
+    private let syncQueue: DispatchQueue
 
     private(set) var audioStreamID: AudioFileStreamID?
     private(set) var fileTypeID: AudioFileTypeID?
+    private(set) var parsingComplete = false
 
     init(
         type: AudioFileTypeID? = nil,
+        queue: DispatchQueue,
         receiveError: @escaping ErrorCallback,
         receiveASBD: @escaping ASBDCallback,
         receivePackets: @escaping PacketsCallback
     ) {
         self.fileTypeID = type
+        self.syncQueue = queue
         self.receiveError = receiveError
         self.receiveASBD = receiveASBD
         self.receivePackets = receivePackets
     }
 
-    @discardableResult
-    func open() -> Self {
-        syncQueue.sync {
-            let instance = UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
-            let status = AudioFileStreamOpen(instance, { instance, _, propertyID, _ in
-                let stream = Unmanaged<AudioFileStream>.fromOpaque(instance).takeUnretainedValue()
-                stream.onFileStreamPropertyReceived(propertyID: propertyID)
-            }, { instance, numberBytes, numberPackets, bytes, packets in
-                let stream = Unmanaged<AudioFileStream>.fromOpaque(instance).takeUnretainedValue()
-                stream.onFileStreamPacketsReceived(
-                    numberOfBytes: numberBytes,
-                    bytes: bytes,
-                    numberOfPackets: numberPackets,
-                    packets: packets
-                )
-            }, fileTypeID ?? 0, &audioStreamID )
-            if status != noErr { receiveError(.status(status)) }
-            if audioStreamID == nil { receiveError(.streamNotOpened) }
-
-            return self
-        }
+    func open() {
+        let instance = UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
+        let status = AudioFileStreamOpen(instance, { instance, _, propertyID, _ in
+            let stream = Unmanaged<AudioFileStream>.fromOpaque(instance).takeUnretainedValue()
+            stream.onFileStreamPropertyReceived(propertyID: propertyID)
+        }, { instance, numberBytes, numberPackets, bytes, packets in
+            let stream = Unmanaged<AudioFileStream>.fromOpaque(instance).takeUnretainedValue()
+            stream.onFileStreamPacketsReceived(
+                numberOfBytes: numberBytes,
+                bytes: bytes,
+                numberOfPackets: numberPackets,
+                packets: packets
+            )
+        }, fileTypeID ?? 0, &audioStreamID )
+        if status != noErr { receiveError(.status(status)) }
+        if audioStreamID == nil { receiveError(.streamNotOpened) }
     }
 
     func close() {
-        syncQueue.sync {
-            audioStreamID.flatMap { _ = AudioFileStreamClose($0) }
-            audioStreamID = nil
-        }
+        guard let streamID = audioStreamID else { return }
+        AudioFileStreamClose(streamID)
+        audioStreamID = nil
     }
 
     func parseData(_ data: Data) {
-        syncQueue.sync {
-            guard let audioStreamID else { return }
+        syncQueue.async { [weak self] in
+            guard let self, let audioStreamID else { return }
             data.withUnsafeBytes { pointer in
                 guard let baseAddress = pointer.baseAddress else { return }
                 AudioFileStreamParseBytes(audioStreamID, UInt32(data.count), baseAddress, [])
@@ -73,9 +70,10 @@ final class AudioFileStream {
     }
 
     func finishDataParsing() {
-        syncQueue.sync {
-            guard let audioStreamID else { return }
+        syncQueue.async { [weak self] in
+            guard let self, let audioStreamID else { return }
             AudioFileStreamParseBytes(audioStreamID, 0, nil, [])
+            parsingComplete = true
         }
     }
 

@@ -12,7 +12,7 @@
 		995EF5ED2B815F17000B5E39 /* ExampleApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 995EF5EC2B815F17000B5E39 /* ExampleApp.swift */; };
 		995EF5F12B815F1C000B5E39 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 995EF5F02B815F1C000B5E39 /* Assets.xcassets */; };
 		998CCB872BEABC03007E0F27 /* sample.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 998CCB862BEABC03007E0F27 /* sample.mp3 */; };
-		998CCB8F2BEABCFB007E0F27 /* SpeechToTextView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 998CCB8B2BEABCFB007E0F27 /* SpeechToTextView.swift */; };
+		998CCB8F2BEABCFB007E0F27 /* TextToSpeechView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 998CCB8B2BEABCFB007E0F27 /* TextToSpeechView.swift */; };
 		998CCB922BEABCFB007E0F27 /* OpenAI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 998CCB8E2BEABCFB007E0F27 /* OpenAI.swift */; };
 		998CCB942BEABF26007E0F27 /* LocalFileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 998CCB932BEABF26007E0F27 /* LocalFileView.swift */; };
 		998CCB962BEABFF9007E0F27 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 998CCB952BEABFF9007E0F27 /* RootView.swift */; };
@@ -28,7 +28,7 @@
 		995EF5F02B815F1C000B5E39 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		998CCB862BEABC03007E0F27 /* sample.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = sample.mp3; sourceTree = "<group>"; };
 		998CCB8A2BEABCB6007E0F27 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		998CCB8B2BEABCFB007E0F27 /* SpeechToTextView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SpeechToTextView.swift; sourceTree = "<group>"; };
+		998CCB8B2BEABCFB007E0F27 /* TextToSpeechView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = TextToSpeechView.swift; sourceTree = "<group>"; };
 		998CCB8E2BEABCFB007E0F27 /* OpenAI.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = OpenAI.swift; sourceTree = "<group>"; };
 		998CCB932BEABF26007E0F27 /* LocalFileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalFileView.swift; sourceTree = "<group>"; };
 		998CCB952BEABFF9007E0F27 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
@@ -70,7 +70,7 @@
 				998CCB852BEABBF5007E0F27 /* Resources */,
 				995EF5EC2B815F17000B5E39 /* ExampleApp.swift */,
 				998CCB952BEABFF9007E0F27 /* RootView.swift */,
-				998CCB8B2BEABCFB007E0F27 /* SpeechToTextView.swift */,
+				998CCB8B2BEABCFB007E0F27 /* TextToSpeechView.swift */,
 				998CCB932BEABF26007E0F27 /* LocalFileView.swift */,
 				999D3F652BED40A1005A0619 /* AudioControlsView.swift */,
 				998CCB8E2BEABCFB007E0F27 /* OpenAI.swift */,
@@ -176,7 +176,7 @@
 				998CCB942BEABF26007E0F27 /* LocalFileView.swift in Sources */,
 				9919E4A82C1A2F0F00B507E7 /* DecibelsViewModel.swift in Sources */,
 				998CCB922BEABCFB007E0F27 /* OpenAI.swift in Sources */,
-				998CCB8F2BEABCFB007E0F27 /* SpeechToTextView.swift in Sources */,
+				998CCB8F2BEABCFB007E0F27 /* TextToSpeechView.swift in Sources */,
 				995EF5ED2B815F17000B5E39 /* ExampleApp.swift in Sources */,
 				999D3F662BED40A1005A0619 /* AudioControlsView.swift in Sources */,
 				9919E4A62C1A185300B507E7 /* DecibelsAnalyzer.swift in Sources */,
@@ -332,7 +332,7 @@
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.mseremet.Example;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.mseremet.Example-Chunked-Audio-Player";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = auto;
 				SUPPORTED_PLATFORMS = "appletvos appletvsimulator iphoneos iphonesimulator macosx xros xrsimulator";
@@ -376,7 +376,7 @@
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.mseremet.Example;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.mseremet.Example-Chunked-Audio-Player";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = auto;
 				SUPPORTED_PLATFORMS = "appletvos appletvsimulator iphoneos iphonesimulator macosx xros xrsimulator";

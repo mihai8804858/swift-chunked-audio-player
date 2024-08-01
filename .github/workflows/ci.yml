@@ -26,6 +26,19 @@ jobs:
       - name: Run SwiftLint
         run: make lint
 
+  spell:
+    name: Spell
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install tools
+        run: npm install -g git+https://github.com/streetsidesoftware/cspell-cli
+
+      - name: Run CSpell
+        run: make spell
+
   build:
     name: Build
     runs-on: macos-14
@@ -44,3 +57,19 @@ jobs:
 
       - name: Build platforms in ${{ matrix.config }}
         run: make CONFIG=${{ matrix.config }} build-all-platforms
+
+  build-example:
+    name: Build (example)
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install tools
+        run: gem install xcpretty
+
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Build example
+        run: make build-example
