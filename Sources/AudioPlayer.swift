@@ -26,6 +26,8 @@ public final class AudioPlayer: ObservableObject {
         get { synchronizer?.isMuted ?? false }
         set { synchronizer?.isMuted = newValue }
     }
+    
+    public var rate: Float = 1.0
 
     public init(
       timeUpdateInterval: CMTime = CMTime(value: 1, timescale: 10),
@@ -131,6 +133,7 @@ public final class AudioPlayer: ObservableObject {
             self?.setCurrentBuffer(buffer)
         }
         synchronizer?.prepare(type: type)
+        synchronizer?.rate = rate
     }
 
     private func setCurrentRate(_ rate: Float) {
