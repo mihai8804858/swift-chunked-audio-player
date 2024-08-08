@@ -26,7 +26,7 @@ public final class AudioPlayer: ObservableObject {
         get { synchronizer?.isMuted ?? false }
         set { synchronizer?.isMuted = newValue }
     }
-    
+
     public var rate: Float = 1.0
 
     public init(
