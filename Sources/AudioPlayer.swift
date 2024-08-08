@@ -118,7 +118,9 @@ public final class AudioPlayer: ObservableObject {
             self?.setCurrentDuration(duration)
         } onError: { [weak self] error in
             self?.setCurrentError(error)
-            self?.didFinishPlaying()
+            if error != nil {
+              self?.didFinishPlaying()
+            }
         } onComplete: { [weak self] in
             self?.setCurrentState(.completed)
             self?.didFinishPlaying()
