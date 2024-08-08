@@ -55,19 +55,23 @@ player.start(stream, type: kAudioFileMP3Type)
 * Listen for changes:
 
 ```swift
-player.$state.sink { state in
+player.$currentState.sink { state in
   // handle player state
 }.store(in: &bag)
 
-player.$rate.sink { rate in
+player.$currentRate.sink { rate in
   // handle player rate
+}.store(in: &bag)
+
+player.$currentDuration.sink { duration in
+  // handle player duration
 }.store(in: &bag)
 
 player.$currentTime.sink { time in
   // handle player time
 }.store(in: &bag)
 
-player.$error.sink { error in
+player.$currentError.sink { error in
   if let error {
     // handle player error
   }
@@ -77,6 +81,15 @@ player.$error.sink { error in
 * Control playback:
 
 ```swift
+// Set stream volume
+player.volume = 0.5
+
+// Set muted
+player.isMuted = true
+
+// Set stream rate
+player.rate = 0.5
+
 // Pause current stream
 player.pause()
 
@@ -85,6 +98,15 @@ player.resume()
 
 // Stop current stream
 player.stop()
+
+// Rewind 5 seconds
+player.rewind(CMTime(seconds: 5.0, preferredTimescale: 1000))
+
+// Forward 5 seconds
+player.forward(CMTime(seconds: 5.0, preferredTimescale: 1000))
+
+// Seek to specific time
+player.seek(to: CMTime(seconds: 60, preferredTimescale: 1000))
 ```
 
 * SwiftUI Support
@@ -95,10 +117,11 @@ struct ContentView: View {
   @ObservedObject private var player = AudioPlayer()
 
   var body: some View {
-    Text("State \(player.state)")
-    Text("Rate \(player.rate)")
+    Text("State \(player.currentState)")
+    Text("Rate \(player.currentRate)")
     Text("Time \(player.currentTime)")
-    if let error = player.error {
+    Text("Duration \(player.currentDuration)")
+    if let error = player.currentError {
         Text("Error \(error)")
     }
   }
