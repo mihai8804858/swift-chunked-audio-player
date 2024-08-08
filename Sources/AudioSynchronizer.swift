@@ -44,7 +44,7 @@ final class AudioSynchronizer {
         set { audioRenderer?.isMuted = newValue }
     }
 
-    var rate: Float = 1.0
+    var desiredRate: Float = 1.0
 
     init(
         timeUpdateInterval: CMTime,
@@ -93,7 +93,7 @@ final class AudioSynchronizer {
 
     func resume() {
         guard let audioSynchronizer, audioSynchronizer.rate == 0.0 else { return }
-        audioSynchronizer.rate = rate
+        audioSynchronizer.rate = desiredRate
         onPlaying()
     }
 
@@ -155,7 +155,7 @@ final class AudioSynchronizer {
     private func onFileStreamDescriptionReceived(asbd: AudioStreamBasicDescription) {
         let renderer = AVSampleBufferAudioRenderer()
         let synchronizer = AVSampleBufferRenderSynchronizer()
-        synchronizer.rate = rate
+        synchronizer.rate = desiredRate
         synchronizer.addRenderer(renderer)
         audioRenderer = renderer
         audioSynchronizer = synchronizer
@@ -224,7 +224,7 @@ final class AudioSynchronizer {
         let dataComplete = receiveComplete && audioFileStream.parsingComplete
         let shouldStart = audioRenderer.hasSufficientMediaDataForReliablePlaybackStart || dataComplete
         guard shouldStart else { return }
-        audioSynchronizer.setRate(rate, time: .zero)
+        audioSynchronizer.setRate(desiredRate, time: .zero)
         didStart = true
         onPlaying()
     }
