@@ -32,32 +32,46 @@ struct AudioControlButton: View {
                 onTap()
             }
         } label: {
-            image()
-                .contentTransition(.symbolEffect(.replace))
+            if #available(iOS 17.0, tvOS 17.0, macOS 14.0, *) {
+                image()
+                    .contentTransition(.symbolEffect(.replace))
+            } else {
+                image()
+            }
         }
         .buttonStyle(AudioControlButtonStyle())
     }
 }
 
 struct AudioControlsView: View {
-    let timeFormat = Duration.TimeFormatStyle(pattern: .minuteSecond(padMinuteToLength: 2))
-
     @StateObject var player: AudioPlayer
     let onPlayPause: () -> Void
     let onStop: () -> Void
     let onRewind: () -> Void
     let onForward: () -> Void
 
-    private var currentTime: Duration {
-        Duration.seconds(player.currentTime.seconds)
+    private var currentTime: TimeInterval {
+        player.currentTime.seconds
     }
 
-    private var currentDuration: Duration {
-        Duration.seconds(player.currentDuration.seconds)
+    private var currentDuration: TimeInterval {
+        player.currentDuration.seconds
     }
 
     private var formattedTime: String {
-        currentTime.formatted(timeFormat) + " / " + currentDuration.formatted(timeFormat)
+        if #available(iOS 16.0, tvOS 16.0, macOS 13.0, *) {
+            let format = Duration.TimeFormatStyle(pattern: .minuteSecond(padMinuteToLength: 2))
+            let formattedCurrentTime = Duration.seconds(currentTime).formatted(format)
+            let formattedCurrentDuration = Duration.seconds(currentDuration).formatted(format)
+            return formattedCurrentTime + " / " + formattedCurrentDuration
+        } else {
+            let formatter = DateComponentsFormatter()
+            formatter.allowedUnits = [.minute, .second]
+            formatter.zeroFormattingBehavior = .pad
+            let formattedCurrentTime = formatter.string(from: currentTime)!
+            let formattedCurrentDuration = formatter.string(for: currentDuration)!
+            return formattedCurrentTime + " / " + formattedCurrentDuration
+        }
     }
 
     #if os(macOS)
@@ -78,8 +92,7 @@ struct AudioControlsView: View {
             }, onTap: onPlayPause)
             Text(formattedTime)
                 .padding()
-                .font(.headline.monospaced())
-                .fontWeight(.bold)
+                .font(.headline.monospaced().bold())
                 .foregroundStyle(Color.primary.opacity(player.currentState.isActive ? 1.0 : 0.3))
             AudioControlButton(image: Image(systemName: "stop.fill"), onTap: onStop)
                 .disabled(!player.currentState.isActive)

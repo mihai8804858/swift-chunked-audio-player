@@ -52,20 +52,20 @@ struct LocalFileView: View {
         } message: {
             Text(errorMessage ?? "")
         }
-        .onChange(of: player.currentError) { _, error in
+        .onChange(of: player.currentError) { error in
             handleError(error)
             print("Error = \(error.flatMap { $0.debugDescription } ?? "nil")")
         }
-        .onChange(of: player.currentTime) { _, time in
+        .onChange(of: player.currentTime) { time in
             print("Time = \(time.seconds)")
         }
-        .onChange(of: player.currentDuration) { _, duration in
+        .onChange(of: player.currentDuration) { duration in
             print("Duration = \(duration.seconds)")
         }
-        .onChange(of: player.currentRate) { _, rate in
+        .onChange(of: player.currentRate) { rate in
             print("Rate = \(rate)")
         }
-        .onChange(of: player.currentState) { _, state in
+        .onChange(of: player.currentState) { state in
             print("State = \(state)")
         }
         #if os(iOS) || os(visionOS)
@@ -81,8 +81,7 @@ struct LocalFileView: View {
         } icon: {
             Image(systemName: "speaker.wave.2.circle.fill")
         }
-        .font(.title3)
-        .fontDesign(.monospaced)
+        .font(.title3.monospaced())
         .multilineTextAlignment(.center)
         .lineLimit(nil)
     }

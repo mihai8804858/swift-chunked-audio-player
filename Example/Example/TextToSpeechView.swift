@@ -47,7 +47,7 @@ struct TextToSpeechView: View {
 
     var body: some View {
         VStack(alignment: .center, spacing: 24) {
-            inputTextField
+            textInputView
             controlsView
             volumeView
             rateView
@@ -78,26 +78,30 @@ struct TextToSpeechView: View {
                 apiKeyButton
             }
             ToolbarItem(placement: .navigation) {
-                settingsMenu
-                    #if !os(macOS)
-                    .menuActionDismissBehavior(.disabled)
-                    #endif
+                if #available(iOS 16.4, tvOS 16.4, macOS 13.3, *) {
+                    settingsMenu
+                        #if !os(macOS)
+                        .menuActionDismissBehavior(.disabled)
+                        #endif
+                } else {
+                    settingsMenu
+                }
             }
         }
-        .onChange(of: player.currentError) { _, error in
+        .onChange(of: player.currentError) { error in
             handleError(error)
             print("Error = \(error.flatMap { $0.debugDescription } ?? "nil")")
         }
-        .onChange(of: player.currentTime) { _, time in
+        .onChange(of: player.currentTime) { time in
             print("Time = \(time.seconds)")
         }
-        .onChange(of: player.currentDuration) { _, duration in
+        .onChange(of: player.currentDuration) { duration in
             print("Duration = \(duration.seconds)")
         }
-        .onChange(of: player.currentRate) { _, rate in
+        .onChange(of: player.currentRate) { rate in
             print("Rate = \(rate)")
         }
-        .onChange(of: player.currentState) { _, state in
+        .onChange(of: player.currentState) { state in
             print("State = \(state)")
         }
         #if os(iOS) || os(visionOS)
@@ -107,16 +111,24 @@ struct TextToSpeechView: View {
     }
 
     @ViewBuilder
-    private var inputTextField: some View {
-        TextField("Enter your input", text: $text, axis: .vertical)
+    private var textInputView: some View {
+        inputTextField
             .focused($isFocused, equals: true)
-            .font(.title3)
-            .fontDesign(.monospaced)
+            .font(.title3.monospaced())
             .multilineTextAlignment(.center)
             .lineLimit(nil)
             .submitLabel(.return)
             .autocorrectionDisabled()
             .modifier(Shake(animatableData: CGFloat(attempts)))
+    }
+
+    @ViewBuilder
+    private var inputTextField: some View {
+        if #available(iOS 16.0, tvOS 16.0, macOS 13.0, *) {
+            TextField("Enter your input", text: $text, axis: .vertical)
+        } else {
+            TextField("Enter your input", text: $text)
+        }
     }
 
     @ViewBuilder

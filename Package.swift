@@ -4,9 +4,9 @@ import PackageDescription
 let package = Package(
     name: "swift-chunked-audio-player",
     platforms: [
-        .iOS(.v16),
+        .iOS(.v15),
         .macOS(.v12),
-        .tvOS(.v16),
+        .tvOS(.v15),
         .visionOS(.v1)
     ],
     products: [
