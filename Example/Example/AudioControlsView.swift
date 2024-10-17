@@ -59,7 +59,7 @@ struct AudioControlsView: View {
     private var formattedTime: String {
         currentTime.formatted(timeFormat) + " / " + currentDuration.formatted(timeFormat)
     }
-    
+
     #if os(macOS)
     private let backgroundColor = Color(NSColor.scrubberTexturedBackground)
     #else
