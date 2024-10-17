@@ -5,7 +5,7 @@ let package = Package(
     name: "swift-chunked-audio-player",
     platforms: [
         .iOS(.v16),
-        .macOS(.v13),
+        .macOS(.v12),
         .tvOS(.v16),
         .visionOS(.v1)
     ],
