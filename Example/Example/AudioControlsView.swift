@@ -60,6 +60,12 @@ struct AudioControlsView: View {
         currentTime.formatted(timeFormat) + " / " + currentDuration.formatted(timeFormat)
     }
 
+    #if os(macOS)
+    private let backgroundColor = Color(NSColor.scrubberTexturedBackground)
+    #else
+    private let backgroundColor = Color(UIColor.secondarySystemBackground)
+    #endif
+
     var body: some View {
         HStack {
             AudioControlButton(image: Image(systemName: "gobackward.5"), onTap: onRewind)
@@ -80,7 +86,7 @@ struct AudioControlsView: View {
             AudioControlButton(image: Image(systemName: "goforward.5"), onTap: onForward)
                 .disabled(!player.currentState.isActive)
         }
-        .background(Color(UIColor.secondarySystemBackground))
+        .background(backgroundColor)
         .clipShape(Capsule())
     }
 }
