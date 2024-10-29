@@ -9,6 +9,7 @@ public final class AudioPlayer: ObservableObject {
     private var synchronizer: AudioSynchronizer?
     private let didStartPlaying: @Sendable () -> Void
     private let didFinishPlaying: @Sendable () -> Void
+    private let bufferDidUpdate: @Sendable (CMSampleBuffer) -> Void
 
     @Published public private(set) var currentError: AudioPlayerError?
     @Published public private(set) var currentState = AudioPlayerState.initial
@@ -35,11 +36,13 @@ public final class AudioPlayer: ObservableObject {
     public init(
       timeUpdateInterval: CMTime = CMTime(value: 1, timescale: 10),
       didStartPlaying: @escaping @Sendable () -> Void = {},
-      didFinishPlaying: @escaping @Sendable () -> Void = {}
+      didFinishPlaying: @escaping @Sendable () -> Void = {},
+      bufferDidUpdate: @escaping @Sendable (CMSampleBuffer) -> Void = { _ in }
     ) {
-        self.timeUpdateInterval = timeUpdateInterval
-        self.didStartPlaying = didStartPlaying
-        self.didFinishPlaying = didFinishPlaying
+      self.timeUpdateInterval = timeUpdateInterval
+      self.didStartPlaying = didStartPlaying
+      self.didFinishPlaying = didFinishPlaying
+      self.bufferDidUpdate = bufferDidUpdate
     }
 
     deinit {
@@ -135,7 +138,10 @@ public final class AudioPlayer: ObservableObject {
         } onPaused: { [weak self] in
             self?.setCurrentState(.paused)
         } onSampleBufferChanged: { [weak self] buffer in
+          if let buffer {
             self?.setCurrentBuffer(buffer)
+            self?.bufferDidUpdate(buffer)
+          }
         }
         synchronizer?.prepare(type: type)
     }
