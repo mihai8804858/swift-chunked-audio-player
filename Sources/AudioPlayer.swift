@@ -5,12 +5,12 @@ import AudioToolbox
 
 public final class AudioPlayer: ObservableObject {
     private let timeUpdateInterval: CMTime
+    private let initialVolume: Float
     private var task: Task<Void, Never>?
     private var synchronizer: AudioSynchronizer?
     private let didStartPlaying: @Sendable () -> Void
     private let didFinishPlaying: @Sendable () -> Void
-    private let bufferDidUpdate: @Sendable (CMSampleBuffer) -> Void
-    private let startingVolume: Float
+    private let didUpdateBuffer: @Sendable (CMSampleBuffer) -> Void
 
     @Published public private(set) var currentError: AudioPlayerError?
     @Published public private(set) var currentState = AudioPlayerState.initial
@@ -20,7 +20,7 @@ public final class AudioPlayer: ObservableObject {
     @Published public private(set) var currentBuffer: CMSampleBuffer?
 
     public var volume: Float {
-        get { synchronizer?.volume ?? startingVolume }
+        get { synchronizer?.volume ?? initialVolume }
         set { synchronizer?.volume = newValue }
     }
 
@@ -35,17 +35,17 @@ public final class AudioPlayer: ObservableObject {
     }
 
     public init(
-      timeUpdateInterval: CMTime = CMTime(value: 1, timescale: 10),
-      didStartPlaying: @escaping @Sendable () -> Void = {},
-      didFinishPlaying: @escaping @Sendable () -> Void = {},
-      bufferDidUpdate: @escaping @Sendable (CMSampleBuffer) -> Void = { _ in },
-      startingVolume: Float = 1.0
+        timeUpdateInterval: CMTime = CMTime(value: 1, timescale: 10),
+        initialVolume: Float = 1.0,
+        didStartPlaying: @escaping @Sendable () -> Void = {},
+        didFinishPlaying: @escaping @Sendable () -> Void = {},
+        didUpdateBuffer: @escaping @Sendable (CMSampleBuffer) -> Void = { _ in }
     ) {
-      self.timeUpdateInterval = timeUpdateInterval
-      self.didStartPlaying = didStartPlaying
-      self.didFinishPlaying = didFinishPlaying
-      self.bufferDidUpdate = bufferDidUpdate
-      self.startingVolume = startingVolume
+        self.timeUpdateInterval = timeUpdateInterval
+        self.initialVolume = initialVolume
+        self.didStartPlaying = didStartPlaying
+        self.didFinishPlaying = didFinishPlaying
+        self.didUpdateBuffer = didUpdateBuffer
     }
 
     deinit {
@@ -122,8 +122,8 @@ public final class AudioPlayer: ObservableObject {
 
     private func prepareSynchronizer(type: AudioFileTypeID?) {
         synchronizer = AudioSynchronizer(
-          timeUpdateInterval: timeUpdateInterval,
-          startingVolume: startingVolume
+            timeUpdateInterval: timeUpdateInterval,
+            initialVolume: initialVolume
         ) { [weak self] rate in
             self?.setCurrentRate(rate)
         } onTimeChanged: { [weak self] time in
@@ -133,7 +133,7 @@ public final class AudioPlayer: ObservableObject {
         } onError: { [weak self] error in
             self?.setCurrentError(error)
             if error != nil {
-              self?.didFinishPlaying()
+                self?.didFinishPlaying()
             }
         } onComplete: { [weak self] in
             self?.setCurrentState(.completed)
@@ -144,10 +144,7 @@ public final class AudioPlayer: ObservableObject {
         } onPaused: { [weak self] in
             self?.setCurrentState(.paused)
         } onSampleBufferChanged: { [weak self] buffer in
-          if let buffer {
             self?.setCurrentBuffer(buffer)
-            self?.bufferDidUpdate(buffer)
-          }
         }
         synchronizer?.prepare(type: type)
     }
@@ -192,6 +189,7 @@ public final class AudioPlayer: ObservableObject {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             currentBuffer = buffer
+            buffer.flatMap(didUpdateBuffer)
         }
     }
 }

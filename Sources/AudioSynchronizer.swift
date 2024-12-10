@@ -22,7 +22,7 @@ final class AudioSynchronizer {
     private let onPaused: PausedCallback
     private let onSampleBufferChanged: SampleBufferCallback
     private let timeUpdateInterval: CMTime
-    private let startingVolume: Float
+    private let initialVolume: Float
 
     private var receiveComplete = false
     private var audioBuffersQueue: AudioBuffersQueue?
@@ -36,7 +36,7 @@ final class AudioSynchronizer {
     private var audioRendererTimeCancellable: AnyCancellable?
 
     var volume: Float {
-        get { audioRenderer?.volume ?? startingVolume }
+        get { audioRenderer?.volume ?? initialVolume }
         set { audioRenderer?.volume = newValue }
     }
 
@@ -57,7 +57,7 @@ final class AudioSynchronizer {
 
     init(
         timeUpdateInterval: CMTime,
-        startingVolume: Float = 1.0,
+        initialVolume: Float = 1.0,
         onRateChanged: @escaping RateCallback = { _ in },
         onTimeChanged: @escaping TimeCallback = { _ in },
         onDurationChanged: @escaping DurationCallback = { _ in },
@@ -68,7 +68,7 @@ final class AudioSynchronizer {
         onSampleBufferChanged: @escaping SampleBufferCallback = { _ in }
     ) {
         self.timeUpdateInterval = timeUpdateInterval
-        self.startingVolume = startingVolume
+        self.initialVolume = initialVolume
         self.onRateChanged = onRateChanged
         self.onTimeChanged = onTimeChanged
         self.onDurationChanged = onDurationChanged
@@ -170,7 +170,7 @@ final class AudioSynchronizer {
 
     private func onFileStreamDescriptionReceived(asbd: AudioStreamBasicDescription) {
         let renderer = AVSampleBufferAudioRenderer()
-        renderer.volume = startingVolume
+        renderer.volume = initialVolume
         let synchronizer = AVSampleBufferRenderSynchronizer()
         synchronizer.addRenderer(renderer)
         audioRenderer = renderer
