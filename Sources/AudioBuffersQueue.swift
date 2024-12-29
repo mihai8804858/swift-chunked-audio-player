@@ -1,13 +1,13 @@
 import AVFoundation
 import os
 
-final class AudioBuffersQueue {
+final class AudioBuffersQueue: Sendable {
     private let audioDescription: AudioStreamBasicDescription
-    private var allBuffers = [CMSampleBuffer]()
-    private var buffers = [CMSampleBuffer]()
+    private nonisolated(unsafe) var allBuffers = [CMSampleBuffer]()
+    private nonisolated(unsafe) var buffers = [CMSampleBuffer]()
     private let lock = NSLock()
 
-    private(set) var duration = CMTime.zero
+    private(set) nonisolated(unsafe) var duration = CMTime.zero
 
     var isEmpty: Bool {
         withLock { buffers.isEmpty }

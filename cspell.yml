@@ -13,3 +13,5 @@ ignoreWords:
   - struct
   - gobackward
   - goforward
+  - preconcurrency
+  - swiftlint

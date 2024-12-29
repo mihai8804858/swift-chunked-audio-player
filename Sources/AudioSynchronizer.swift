@@ -2,15 +2,15 @@ import AVFoundation
 import AudioToolbox
 import Combine
 
-final class AudioSynchronizer {
-    typealias RateCallback = (_ time: Float) -> Void
-    typealias TimeCallback = (_ time: CMTime) -> Void
-    typealias DurationCallback = (_ duration: CMTime) -> Void
-    typealias ErrorCallback = (_ error: AudioPlayerError?) -> Void
-    typealias CompleteCallback = () -> Void
-    typealias PlayingCallback = () -> Void
-    typealias PausedCallback = () -> Void
-    typealias SampleBufferCallback = (CMSampleBuffer?) -> Void
+final class AudioSynchronizer: Sendable {
+    typealias RateCallback = @Sendable (_ time: Float) -> Void
+    typealias TimeCallback = @Sendable (_ time: CMTime) -> Void
+    typealias DurationCallback = @Sendable (_ duration: CMTime) -> Void
+    typealias ErrorCallback = @Sendable (_ error: AudioPlayerError?) -> Void
+    typealias CompleteCallback = @Sendable () -> Void
+    typealias PlayingCallback = @Sendable () -> Void
+    typealias PausedCallback = @Sendable () -> Void
+    typealias SampleBufferCallback = @Sendable (CMSampleBuffer?) -> Void
 
     private let queue = DispatchQueue(label: "audio.player.queue")
     private let onRateChanged: RateCallback
@@ -24,16 +24,26 @@ final class AudioSynchronizer {
     private let timeUpdateInterval: CMTime
     private let initialVolume: Float
 
-    private var receiveComplete = false
-    private var audioBuffersQueue: AudioBuffersQueue?
-    private var audioFileStream: AudioFileStream?
-    private var audioRenderer: AVSampleBufferAudioRenderer?
-    private var audioSynchronizer: AVSampleBufferRenderSynchronizer?
-    private var currentSampleBufferTime: CMTime?
+    private nonisolated(unsafe) var receiveComplete = false
+    private nonisolated(unsafe) var audioBuffersQueue: AudioBuffersQueue?
+    private nonisolated(unsafe) var audioFileStream: AudioFileStream?
+    private nonisolated(unsafe) var audioRenderer: AVSampleBufferAudioRenderer?
+    private nonisolated(unsafe) var audioSynchronizer: AVSampleBufferRenderSynchronizer?
+    private nonisolated(unsafe) var currentSampleBufferTime: CMTime?
 
-    private var audioRendererErrorCancellable: AnyCancellable?
-    private var audioRendererRateCancellable: AnyCancellable?
-    private var audioRendererTimeCancellable: AnyCancellable?
+    private nonisolated(unsafe) var audioRendererErrorCancellable: AnyCancellable?
+    private nonisolated(unsafe) var audioRendererRateCancellable: AnyCancellable?
+    private nonisolated(unsafe) var audioRendererTimeCancellable: AnyCancellable?
+
+    nonisolated(unsafe) var desiredRate: Float = 1.0 {
+        didSet {
+            if desiredRate == 0.0 {
+                pause()
+            } else {
+                resume(at: desiredRate)
+            }
+        }
+    }
 
     var volume: Float {
         get { audioRenderer?.volume ?? initialVolume }
@@ -43,16 +53,6 @@ final class AudioSynchronizer {
     var isMuted: Bool {
         get { audioRenderer?.isMuted ?? false }
         set { audioRenderer?.isMuted = newValue }
-    }
-
-    var desiredRate: Float = 1.0 {
-        didSet {
-            if desiredRate == 0.0 {
-                pause()
-            } else {
-                resume(at: desiredRate)
-            }
-        }
     }
 
     init(
@@ -145,7 +145,7 @@ final class AudioSynchronizer {
         receiveComplete = true
     }
 
-    func invalidate(_ completion: @escaping () -> Void = {}) {
+    func invalidate(_ completion: @escaping @Sendable () -> Void = {}) {
         removeBuffers()
         closeFileStream()
         cancelObservation()
@@ -200,7 +200,7 @@ final class AudioSynchronizer {
     }
 
     private func startRequestingMediaData(_ renderer: AVSampleBufferAudioRenderer) {
-        var didStart = false
+        nonisolated(unsafe) var didStart = false
         renderer.requestMediaDataWhenReady(on: queue) { [weak self] in
             guard let self, let audioRenderer, let audioBuffersQueue else { return }
             while let buffer = audioBuffersQueue.peek(), audioRenderer.isReadyForMoreMediaData {
@@ -215,7 +215,7 @@ final class AudioSynchronizer {
     }
 
     private func restartRequestingMediaData(_ renderer: AVSampleBufferAudioRenderer, from time: CMTime, rate: Float) {
-        var didStart = false
+        nonisolated(unsafe) var didStart = false
         renderer.requestMediaDataWhenReady(on: queue) { [weak self] in
             guard let self, let audioRenderer, let audioSynchronizer, let audioBuffersQueue else { return }
             while let buffer = audioBuffersQueue.peek(), audioRenderer.isReadyForMoreMediaData {
