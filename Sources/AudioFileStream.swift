@@ -53,12 +53,13 @@ final class AudioFileStream: Sendable {
         if audioStreamID == nil { receiveError(.streamNotOpened) }
     }
 
-    func close() {
-        guard let streamID = audioStreamID else { return }
-        AudioFileStreamClose(streamID)
-        audioStreamID = nil
+  func close() {
+    syncQueue.async {
+      guard let streamID = self.audioStreamID else { return }
+      AudioFileStreamClose(streamID)
+      self.audioStreamID = nil
     }
-
+  }
     func parseData(_ data: Data) {
         syncQueue.async { [weak self] in
             guard let self, let audioStreamID else { return }
