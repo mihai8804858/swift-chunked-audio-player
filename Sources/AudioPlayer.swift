@@ -3,7 +3,6 @@ import Combine
 import AVFoundation
 import AudioToolbox
 
-@MainActor
 public final class AudioPlayer: ObservableObject, Sendable {
     private let timeUpdateInterval: CMTime
     private let initialVolume: Float
