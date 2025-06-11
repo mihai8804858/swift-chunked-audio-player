@@ -3,7 +3,7 @@ import Combine
 import AVFoundation
 import AudioToolbox
 
-public final class AudioPlayer: ObservableObject {
+public final class AudioPlayer: ObservableObject, @unchecked Sendable {
     private let timeUpdateInterval: CMTime
     private let initialVolume: Float
     private nonisolated(unsafe) var task: Task<Void, Never>?
