@@ -11,11 +11,10 @@ final class AudioFileStream: Sendable {
         _ packets: UnsafeMutablePointer<AudioStreamPacketDescription>?
     ) -> Void
 
+    private let lock = NSLock()
     private let receiveError: ErrorCallback
     private let receiveASBD: ASBDCallback
     private let receivePackets: PacketsCallback
-
-    private let syncQueue: DispatchQueue
 
     private(set) nonisolated(unsafe) var audioStreamID: AudioFileStreamID?
     private(set) nonisolated(unsafe) var fileTypeID: AudioFileTypeID?
@@ -23,45 +22,47 @@ final class AudioFileStream: Sendable {
 
     init(
         type: AudioFileTypeID? = nil,
-        queue: DispatchQueue,
         receiveError: @escaping ErrorCallback,
         receiveASBD: @escaping ASBDCallback,
         receivePackets: @escaping PacketsCallback
     ) {
         self.fileTypeID = type
-        self.syncQueue = queue
         self.receiveError = receiveError
         self.receiveASBD = receiveASBD
         self.receivePackets = receivePackets
     }
 
     func open() {
-        let instance = UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
-        let status = AudioFileStreamOpen(instance, { instance, _, propertyID, _ in
-            let stream = Unmanaged<AudioFileStream>.fromOpaque(instance).takeUnretainedValue()
-            stream.onFileStreamPropertyReceived(propertyID: propertyID)
-        }, { instance, numberBytes, numberPackets, bytes, packets in
-            let stream = Unmanaged<AudioFileStream>.fromOpaque(instance).takeUnretainedValue()
-            stream.onFileStreamPacketsReceived(
-                numberOfBytes: numberBytes,
-                bytes: bytes,
-                numberOfPackets: numberPackets,
-                packets: packets
-            )
-        }, fileTypeID ?? 0, &audioStreamID )
-        if status != noErr { receiveError(.status(status)) }
-        if audioStreamID == nil { receiveError(.streamNotOpened) }
+        withLock(lock) {
+            let instance = UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
+            let status = AudioFileStreamOpen(instance, { instance, _, propertyID, _ in
+                let stream = Unmanaged<AudioFileStream>.fromOpaque(instance).takeUnretainedValue()
+                stream.onFileStreamPropertyReceived(propertyID: propertyID)
+            }, { instance, numberBytes, numberPackets, bytes, packets in
+                let stream = Unmanaged<AudioFileStream>.fromOpaque(instance).takeUnretainedValue()
+                stream.onFileStreamPacketsReceived(
+                    numberOfBytes: numberBytes,
+                    bytes: bytes,
+                    numberOfPackets: numberPackets,
+                    packets: packets
+                )
+            }, fileTypeID ?? 0, &audioStreamID)
+            if status != noErr { receiveError(.status(status)) }
+            if audioStreamID == nil { receiveError(.streamNotOpened) }
+        }
     }
 
     func close() {
-        guard let streamID = audioStreamID else { return }
-        AudioFileStreamClose(streamID)
-        audioStreamID = nil
+        withLock(lock) {
+            guard let streamID = audioStreamID else { return }
+            AudioFileStreamClose(streamID)
+            audioStreamID = nil
+        }
     }
 
     func parseData(_ data: Data) {
-        syncQueue.async { [weak self] in
-            guard let self, let audioStreamID else { return }
+        withLock(lock) {
+            guard let audioStreamID else { return }
             data.withUnsafeBytes { pointer in
                 guard let baseAddress = pointer.baseAddress else { return }
                 AudioFileStreamParseBytes(audioStreamID, UInt32(data.count), baseAddress, [])
@@ -70,8 +71,8 @@ final class AudioFileStream: Sendable {
     }
 
     func finishDataParsing() {
-        syncQueue.async { [weak self] in
-            guard let self, let audioStreamID else { return }
+        withLock(lock) {
+            guard let audioStreamID else { return }
             AudioFileStreamParseBytes(audioStreamID, 0, nil, [])
             parsingComplete = true
         }

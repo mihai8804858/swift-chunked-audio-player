@@ -2,15 +2,15 @@ import AVFoundation
 import os
 
 final class AudioBuffersQueue: Sendable {
+    private let lock = NSLock()
     private let audioDescription: AudioStreamBasicDescription
     private nonisolated(unsafe) var allBuffers = [CMSampleBuffer]()
-    private nonisolated(unsafe) var buffers = [CMSampleBuffer]()
-    private let lock = NSLock()
+    private nonisolated(unsafe) var enqueuedBuffers = [CMSampleBuffer]()
 
     private(set) nonisolated(unsafe) var duration = CMTime.zero
 
     var isEmpty: Bool {
-        withLock { buffers.isEmpty }
+        withLock(lock) { enqueuedBuffers.isEmpty }
     }
 
     init(audioDescription: AudioStreamBasicDescription) {
@@ -24,26 +24,26 @@ final class AudioBuffersQueue: Sendable {
         numberOfPackets: UInt32,
         packets: UnsafeMutablePointer<AudioStreamPacketDescription>?
     ) throws {
-        try withLock {
+        try withLock(lock) {
             guard let buffer = try makeSampleBuffer(
                 from: Data(bytes: bytes, count: Int(numberOfBytes)),
                 packetCount: numberOfPackets,
                 packetDescriptions: packets
             ) else { return }
             updateDuration(for: buffer)
-            buffers.append(buffer)
+            enqueuedBuffers.append(buffer)
             allBuffers.append(buffer)
         }
     }
 
     func peek() -> CMSampleBuffer? {
-        withLock { buffers.first }
+        withLock(lock) { enqueuedBuffers.first }
     }
 
     func dequeue() -> CMSampleBuffer? {
-        withLock {
-            if buffers.isEmpty { return nil }
-            return buffers.removeFirst()
+        withLock(lock) {
+            if enqueuedBuffers.isEmpty { return nil }
+            return enqueuedBuffers.removeFirst()
         }
     }
 
@@ -52,27 +52,27 @@ final class AudioBuffersQueue: Sendable {
     }
 
     func removeAll() {
-        withLock {
+        withLock(lock) {
             allBuffers.removeAll()
-            buffers.removeAll()
+            enqueuedBuffers.removeAll()
             duration = .zero
         }
     }
 
     func buffer(at time: CMTime) -> CMSampleBuffer? {
-        withLock { allBuffers.first { $0.timeRange.containsTime(time) } }
+        withLock(lock) { allBuffers.first { $0.timeRange.containsTime(time) } }
     }
 
     func flush() {
-        withLock { buffers.removeAll() }
+        withLock(lock) { enqueuedBuffers.removeAll() }
     }
 
     func seek(to time: CMTime) {
-        withLock {
+        withLock(lock) {
             guard let index = allBuffers.enumerated().first(where: { _, buffer in
                 buffer.timeRange.containsTime(time)
             })?.offset else { return }
-            buffers = Array(allBuffers[index...])
+            enqueuedBuffers = Array(allBuffers[index...])
         }
     }
 
@@ -131,11 +131,5 @@ final class AudioBuffersQueue: Sendable {
 
     private func updateDuration(for buffer: CMSampleBuffer) {
         duration = buffer.presentationTimeStamp + buffer.duration
-    }
-
-    private func withLock<T>(_ perform: () throws -> T) rethrows -> T {
-        lock.lock()
-        defer { lock.unlock() }
-        return try perform()
     }
 }

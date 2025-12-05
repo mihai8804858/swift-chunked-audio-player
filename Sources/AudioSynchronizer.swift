@@ -22,8 +22,8 @@ final class AudioSynchronizer: Sendable {
     private let onPaused: PausedCallback
     private let onSampleBufferChanged: SampleBufferCallback
     private let timeUpdateInterval: CMTime
-    private let initialVolume: Float
 
+    private nonisolated(unsafe) var initialVolume: Float
     private nonisolated(unsafe) var receiveComplete = false
     private nonisolated(unsafe) var audioBuffersQueue: AudioBuffersQueue?
     private nonisolated(unsafe) var audioFileStream: AudioFileStream?
@@ -47,7 +47,10 @@ final class AudioSynchronizer: Sendable {
 
     var volume: Float {
         get { audioRenderer?.volume ?? initialVolume }
-        set { audioRenderer?.volume = newValue }
+        set {
+            audioRenderer?.volume = newValue
+            initialVolume = newValue
+        }
     }
 
     var isMuted: Bool {
@@ -81,7 +84,7 @@ final class AudioSynchronizer: Sendable {
 
     func prepare(type: AudioFileTypeID? = nil) {
         invalidate()
-        audioFileStream = AudioFileStream(type: type, queue: queue) { [weak self] error in
+        audioFileStream = AudioFileStream(type: type) { [weak self] error in
             self?.onError(error)
         } receiveASBD: { [weak self] asbd in
             self?.onFileStreamDescriptionReceived(asbd: asbd)
@@ -305,8 +308,8 @@ final class AudioSynchronizer: Sendable {
                 onTimeChanged(audioBuffersQueue.duration)
                 audioSynchronizer.setRate(0.0, time: audioSynchronizer.currentTime())
                 onRateChanged(0.0)
-                onComplete()
                 invalidate()
+                onComplete()
             } else {
                 onTimeChanged(time)
             }
