@@ -11,7 +11,7 @@ SIM_PLATFORM_IOS = platform=iOS Simulator,id=$(call udid_for,iOS 26.1,iPhone \d\
 SIM_PLATFORM_MACOS = platform=macOS,arch=arm64
 SIM_PLATFORM_MAC_CATALYST = platform=macOS,variant=Mac Catalyst,arch=arm64
 SIM_PLATFORM_TVOS = platform=tvOS Simulator,id=$(call udid_for,tvOS 26.1,TV)
-SIM_PLATFORM_VISIONOS = platform=visionOS Simulator,id=$(call udid_for,visionOS 3.1,Vision)
+SIM_PLATFORM_VISIONOS = platform=visionOS Simulator,id=$(call udid_for,visionOS 26.1,Vision)
 
 GREEN='\033[0;32m'
 NC='\033[0m'
