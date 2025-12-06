@@ -1,7 +1,7 @@
 import AVFoundation
 import AudioToolbox
 
-final class AudioFileStream: Sendable {
+final class AudioFileStream: @unchecked Sendable {
     typealias ErrorCallback = @Sendable (_ error: AudioPlayerError) -> Void
     typealias ASBDCallback = @Sendable (_ asbd: AudioStreamBasicDescription) -> Void
     typealias PacketsCallback = @Sendable (
@@ -16,9 +16,9 @@ final class AudioFileStream: Sendable {
     private let receiveASBD: ASBDCallback
     private let receivePackets: PacketsCallback
 
-    private(set) nonisolated(unsafe) var audioStreamID: AudioFileStreamID?
-    private(set) nonisolated(unsafe) var fileTypeID: AudioFileTypeID?
-    private(set) nonisolated(unsafe) var parsingComplete = false
+    private(set) var audioStreamID: AudioFileStreamID?
+    private(set) var fileTypeID: AudioFileTypeID?
+    private(set) var parsingComplete = false
 
     init(
         type: AudioFileTypeID? = nil,

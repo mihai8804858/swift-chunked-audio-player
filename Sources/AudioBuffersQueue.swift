@@ -1,13 +1,12 @@
 import AVFoundation
 import os
 
-final class AudioBuffersQueue: Sendable {
+final class AudioBuffersQueue: @unchecked Sendable {
     private let lock = NSLock()
     private let audioDescription: AudioStreamBasicDescription
-    private nonisolated(unsafe) var allBuffers = [CMSampleBuffer]()
-    private nonisolated(unsafe) var enqueuedBuffers = [CMSampleBuffer]()
-
-    private(set) nonisolated(unsafe) var duration = CMTime.zero
+    private var allBuffers = [CMSampleBuffer]()
+    private var enqueuedBuffers = [CMSampleBuffer]()
+    private(set) var duration = CMTime.zero
 
     var isEmpty: Bool {
         withLock(lock) { enqueuedBuffers.isEmpty }
@@ -69,9 +68,7 @@ final class AudioBuffersQueue: Sendable {
 
     func seek(to time: CMTime) {
         withLock(lock) {
-            guard let index = allBuffers.enumerated().first(where: { _, buffer in
-                buffer.timeRange.containsTime(time)
-            })?.offset else { return }
+            guard let index = allBuffers.firstIndex(where: { $0.timeRange.containsTime(time) }) else { return }
             enqueuedBuffers = Array(allBuffers[index...])
         }
     }
