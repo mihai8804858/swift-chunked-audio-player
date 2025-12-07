@@ -22,6 +22,7 @@ final class AudioSynchronizer: @unchecked Sendable {
     private let onEvent: @Sendable (Event) -> Void
     private let timeUpdateInterval: CMTime
 
+    private var isBuffering = false
     private var receiveComplete = false
     private var audioBuffersQueue: AudioBuffersQueue?
     private var audioFileStream: AudioFileStream?
@@ -32,6 +33,10 @@ final class AudioSynchronizer: @unchecked Sendable {
     private var audioRendererErrorCancellable: AnyCancellable?
     private var audioRendererRateCancellable: AnyCancellable?
     private var audioRendererTimeCancellable: AnyCancellable?
+
+    private var dataComplete: Bool {
+        receiveComplete && audioFileStream?.parsingComplete == true
+    }
 
     var rate: Float = 1.0 {
         didSet {
@@ -72,16 +77,17 @@ final class AudioSynchronizer: @unchecked Sendable {
     func pause() {
         guard let audioSynchronizer, audioSynchronizer.rate != 0.0 else { return }
         audioSynchronizer.rate = 0.0
+        rate = 0
         onEvent(.stateChanged(.paused))
     }
 
-    func resume(at resumeRate: Float? = nil) {
+    func resume(at resumeRate: Float = 1.0) {
         guard let audioSynchronizer else { return }
         let oldRate = audioSynchronizer.rate
-        let newRate = resumeRate ?? rate
-        guard audioSynchronizer.rate != newRate else { return }
-        audioSynchronizer.rate = newRate
-        if oldRate == 0.0 && newRate != 0.0 {
+        guard audioSynchronizer.rate != resumeRate else { return }
+        audioSynchronizer.rate = resumeRate
+        rate = resumeRate
+        if oldRate == 0.0 && resumeRate != 0.0 {
             onEvent(.stateChanged(.playing))
         }
     }
@@ -122,6 +128,7 @@ final class AudioSynchronizer: @unchecked Sendable {
         removeBuffers()
         closeFileStream()
         cancelObservation()
+        isBuffering = false
         receiveComplete = false
         currentSampleBufferTime = nil
         onEvent(.sampleBufferChanged(nil))
@@ -167,8 +174,17 @@ final class AudioSynchronizer: @unchecked Sendable {
 
     private func onFileStreamPacketsReceived(packets: AudioFileStream.Packets) {
         do {
-            guard let audioBuffersQueue else { return }
+            guard let audioBuffersQueue, let audioSynchronizer, let audioRenderer else { return }
             try audioBuffersQueue.enqueue(packets: packets)
+            onEvent(.durationChanged(audioBuffersQueue.duration))
+            if let buffer = audioBuffersQueue.peek(), isBuffering {
+                audioRenderer.enqueue(buffer)
+                audioBuffersQueue.removeFirst()
+                if audioRenderer.hasSufficientMediaDataForReliablePlaybackStart || dataComplete {
+                    audioSynchronizer.setRate(rate, time: audioSynchronizer.currentTime())
+                    isBuffering = false
+                }
+            }
         } catch {
             onEvent(.stateChanged(.failed(AudioPlayerError(error: error))))
         }
@@ -181,10 +197,9 @@ final class AudioSynchronizer: @unchecked Sendable {
             while let buffer = audioBuffersQueue.peek(), audioRenderer.isReadyForMoreMediaData {
                 audioRenderer.enqueue(buffer)
                 audioBuffersQueue.removeFirst()
-                onEvent(.durationChanged(audioBuffersQueue.duration))
-                startPlaybackIfNeeded(didStart: &didStart)
+                startPlaybackIfNeeded(at: .zero, didStart: &didStart)
             }
-            startPlaybackIfNeeded(didStart: &didStart)
+            startPlaybackIfNeeded(at: .zero, didStart: &didStart)
             stopRequestingMediaDataIfNeeded()
         }
     }
@@ -196,7 +211,6 @@ final class AudioSynchronizer: @unchecked Sendable {
             while let buffer = audioBuffersQueue.peek(), audioRenderer.isReadyForMoreMediaData {
                 audioRenderer.enqueue(buffer)
                 audioBuffersQueue.removeFirst()
-                onEvent(.durationChanged(audioBuffersQueue.duration))
             }
             if !didStart {
                 audioSynchronizer.setRate(rate, time: time)
@@ -206,23 +220,21 @@ final class AudioSynchronizer: @unchecked Sendable {
         }
     }
 
-    private func startPlaybackIfNeeded(didStart: inout Bool) {
+    private func startPlaybackIfNeeded(at time: CMTime, didStart: inout Bool) {
         guard let audioRenderer,
               let audioSynchronizer,
-              let audioFileStream,
               audioSynchronizer.rate == 0,
               !didStart else { return }
-        let dataComplete = receiveComplete && audioFileStream.parsingComplete
         let shouldStart = audioRenderer.hasSufficientMediaDataForReliablePlaybackStart || dataComplete
         guard shouldStart else { return }
-        audioSynchronizer.setRate(rate, time: .zero)
+        audioSynchronizer.setRate(rate, time: time)
         didStart = true
         onEvent(.stateChanged(.playing))
     }
 
     private func stopRequestingMediaDataIfNeeded() {
-        guard let audioRenderer, let audioBuffersQueue, let audioFileStream else { return }
-        if audioBuffersQueue.isEmpty && receiveComplete && audioFileStream.parsingComplete {
+        guard let audioRenderer, let audioBuffersQueue else { return }
+        if audioBuffersQueue.isEmpty && dataComplete {
             audioRenderer.stopRequestingMediaData()
         }
     }
@@ -277,11 +289,15 @@ final class AudioSynchronizer: @unchecked Sendable {
             guard let self else { return }
             updateCurrentBufferIfNeeded(at: time)
             if let audioBuffersQueue, let audioSynchronizer, time >= audioBuffersQueue.duration {
+                audioSynchronizer.setRate(0.0, time: audioBuffersQueue.duration)
                 onEvent(.timeChanged(audioBuffersQueue.duration))
-                audioSynchronizer.setRate(0.0, time: audioSynchronizer.currentTime())
                 onEvent(.rateChanged(0.0))
-                invalidate()
-                onEvent(.stateChanged(.complete))
+                if dataComplete { // finished playback
+                    invalidate()
+                    onEvent(.stateChanged(.complete))
+                } else { // buffering
+                    isBuffering = true
+                }
             } else {
                 onEvent(.timeChanged(time))
             }
