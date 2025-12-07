@@ -124,22 +124,18 @@ public final class AudioPlayer: ObservableObject, @unchecked Sendable {
     }
 
     private func makeSynchronizer() -> AudioSynchronizer {
-        AudioSynchronizer(timeUpdateInterval: timeUpdateInterval) { [weak self] rate in
-            self?.setCurrentRate(rate)
-        } onTimeChanged: { [weak self] time in
-            self?.setCurrentTime(time)
-        } onDurationChanged: { [weak self] duration in
-            self?.setCurrentDuration(duration)
-        } onError: { [weak self] error in
-            self?.setCurrentError(error)
-        } onComplete: { [weak self] in
-            self?.setCurrentState(.completed)
-        } onPlaying: { [weak self] in
-            self?.setCurrentState(.playing)
-        } onPaused: { [weak self] in
-            self?.setCurrentState(.paused)
-        } onSampleBufferChanged: { [weak self] buffer in
-            self?.setCurrentBuffer(buffer)
+        AudioSynchronizer(timeUpdateInterval: timeUpdateInterval) { [weak self] event in
+            guard let self else { return }
+            switch event {
+            case .stateChanged(.playing): setCurrentState(.playing)
+            case .stateChanged(.paused): setCurrentState(.paused)
+            case .stateChanged(.complete): setCurrentState(.completed)
+            case let .stateChanged(.failed(error)): setCurrentError(error)
+            case let .rateChanged(rate): setCurrentRate(rate)
+            case let .timeChanged(time): setCurrentTime(time)
+            case let .durationChanged(duration): setCurrentDuration(duration)
+            case let .sampleBufferChanged(buffer): setCurrentBuffer(buffer)
+            }
         }
     }
 

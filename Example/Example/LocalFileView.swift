@@ -107,7 +107,7 @@ struct LocalFileView: View {
     private var volumeView: some View {
         VStack {
             Text("Volume: \(Int(player.volume * 100))")
-            Slider(value: volumeBinding, in: 0...1, step: 0.01)
+            Slider(value: volumeBinding, in: 0...1)
         }
         .frame(maxWidth: 200)
     }
@@ -116,7 +116,11 @@ struct LocalFileView: View {
     private var rateView: some View {
         VStack {
             Text("Rate: \(player.rate.formatted(.number.precision(.fractionLength(2))))")
-            Slider(value: rateBinding, in: 0...1, step: 0.01)
+            if #available(iOS 26, tvOS 26, visionOS 26, macOS 26, *) {
+                Slider(value: rateBinding, in: 0.25...2.0, neutralValue: 1.0, label: { EmptyView() })
+            } else {
+                Slider(value: rateBinding, in: 0.25...2.0)
+            }
         }
         .frame(maxWidth: 200)
     }

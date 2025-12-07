@@ -3,24 +3,23 @@ import AudioToolbox
 import Combine
 
 final class AudioSynchronizer: @unchecked Sendable {
-    typealias RateCallback = @Sendable (_ time: Float) -> Void
-    typealias TimeCallback = @Sendable (_ time: CMTime) -> Void
-    typealias DurationCallback = @Sendable (_ duration: CMTime) -> Void
-    typealias ErrorCallback = @Sendable (_ error: AudioPlayerError?) -> Void
-    typealias CompleteCallback = @Sendable () -> Void
-    typealias PlayingCallback = @Sendable () -> Void
-    typealias PausedCallback = @Sendable () -> Void
-    typealias SampleBufferCallback = @Sendable (CMSampleBuffer?) -> Void
+    enum State: Equatable, Sendable {
+        case playing
+        case paused
+        case complete
+        case failed(AudioPlayerError?)
+    }
+
+    enum Event: Equatable, Sendable {
+        case stateChanged(State)
+        case rateChanged(Float)
+        case timeChanged(CMTime)
+        case durationChanged(CMTime)
+        case sampleBufferChanged(CMSampleBuffer?)
+    }
 
     private let queue = DispatchQueue(label: "audio.player.queue")
-    private let onRateChanged: RateCallback
-    private let onTimeChanged: TimeCallback
-    private let onDurationChanged: DurationCallback
-    private let onError: ErrorCallback
-    private let onComplete: CompleteCallback
-    private let onPlaying: PlayingCallback
-    private let onPaused: PausedCallback
-    private let onSampleBufferChanged: SampleBufferCallback
+    private let onEvent: @Sendable (Event) -> Void
     private let timeUpdateInterval: CMTime
 
     private var receiveComplete = false
@@ -58,24 +57,10 @@ final class AudioSynchronizer: @unchecked Sendable {
 
     init(
         timeUpdateInterval: CMTime,
-        onRateChanged: @escaping RateCallback,
-        onTimeChanged: @escaping TimeCallback,
-        onDurationChanged: @escaping DurationCallback,
-        onError: @escaping ErrorCallback,
-        onComplete: @escaping CompleteCallback,
-        onPlaying: @escaping PlayingCallback,
-        onPaused: @escaping PausedCallback,
-        onSampleBufferChanged: @escaping SampleBufferCallback
+        onEvent: @escaping @Sendable (Event) -> Void
     ) {
         self.timeUpdateInterval = timeUpdateInterval
-        self.onRateChanged = onRateChanged
-        self.onTimeChanged = onTimeChanged
-        self.onDurationChanged = onDurationChanged
-        self.onError = onError
-        self.onComplete = onComplete
-        self.onPlaying = onPlaying
-        self.onPaused = onPaused
-        self.onSampleBufferChanged = onSampleBufferChanged
+        self.onEvent = onEvent
     }
 
     func prepare(type: AudioFileTypeID? = nil) {
@@ -87,7 +72,7 @@ final class AudioSynchronizer: @unchecked Sendable {
     func pause() {
         guard let audioSynchronizer, audioSynchronizer.rate != 0.0 else { return }
         audioSynchronizer.rate = 0.0
-        onPaused()
+        onEvent(.stateChanged(.paused))
     }
 
     func resume(at resumeRate: Float? = nil) {
@@ -96,8 +81,8 @@ final class AudioSynchronizer: @unchecked Sendable {
         let newRate = resumeRate ?? rate
         guard audioSynchronizer.rate != newRate else { return }
         audioSynchronizer.rate = newRate
-        if oldRate == 0.0 && newRate > 0.0 {
-            onPlaying()
+        if oldRate == 0.0 && newRate != 0.0 {
+            onEvent(.stateChanged(.playing))
         }
     }
 
@@ -139,7 +124,7 @@ final class AudioSynchronizer: @unchecked Sendable {
         cancelObservation()
         receiveComplete = false
         currentSampleBufferTime = nil
-        onSampleBufferChanged(nil)
+        onEvent(.sampleBufferChanged(nil))
         if let audioSynchronizer, let audioRenderer {
             audioRenderer.stopRequestingMediaData()
             audioSynchronizer.removeRenderer(audioRenderer, at: .zero) { [weak self] _ in
@@ -157,17 +142,13 @@ final class AudioSynchronizer: @unchecked Sendable {
     // MARK: - Private
 
     private func makeFileStream(type: AudioFileTypeID?) -> AudioFileStream {
-        AudioFileStream(type: type) { [weak self] error in
-            self?.onError(error)
-        } receiveASBD: { [weak self] asbd in
-            self?.onFileStreamDescriptionReceived(asbd: asbd)
-        } receivePackets: { [weak self] numberOfBytes, bytes, numberOfPackets, packets in
-            self?.onFileStreamPacketsReceived(
-                numberOfBytes: numberOfBytes,
-                bytes: bytes,
-                numberOfPackets: numberOfPackets,
-                packets: packets
-            )
+        AudioFileStream(type: type) { [weak self] event in
+            guard let self else { return }
+            switch event {
+            case let .failure(error): onEvent(.stateChanged(.failed(error)))
+            case let .asbdReceived(asbd): onFileStreamDescriptionReceived(asbd: asbd)
+            case let .packetsReceived(packets): onFileStreamPacketsReceived(packets: packets)
+            }
         }
     }
 
@@ -184,33 +165,23 @@ final class AudioSynchronizer: @unchecked Sendable {
         startRequestingMediaData(renderer)
     }
 
-    private func onFileStreamPacketsReceived(
-        numberOfBytes: UInt32,
-        bytes: UnsafeRawPointer,
-        numberOfPackets: UInt32,
-        packets: UnsafeMutablePointer<AudioStreamPacketDescription>?
-    ) {
+    private func onFileStreamPacketsReceived(packets: AudioFileStream.Packets) {
         do {
             guard let audioBuffersQueue else { return }
-            try audioBuffersQueue.enqueue(
-                numberOfBytes: numberOfBytes,
-                bytes: bytes,
-                numberOfPackets: numberOfPackets,
-                packets: packets
-            )
+            try audioBuffersQueue.enqueue(packets: packets)
         } catch {
-            onError(AudioPlayerError(error: error))
+            onEvent(.stateChanged(.failed(AudioPlayerError(error: error))))
         }
     }
 
     private func startRequestingMediaData(_ renderer: AVSampleBufferAudioRenderer) {
-        var didStart = false
+        nonisolated(unsafe) var didStart = false
         renderer.requestMediaDataWhenReady(on: queue) { [weak self] in
             guard let self, let audioRenderer, let audioBuffersQueue else { return }
             while let buffer = audioBuffersQueue.peek(), audioRenderer.isReadyForMoreMediaData {
                 audioRenderer.enqueue(buffer)
                 audioBuffersQueue.removeFirst()
-                onDurationChanged(audioBuffersQueue.duration)
+                onEvent(.durationChanged(audioBuffersQueue.duration))
                 startPlaybackIfNeeded(didStart: &didStart)
             }
             startPlaybackIfNeeded(didStart: &didStart)
@@ -219,13 +190,13 @@ final class AudioSynchronizer: @unchecked Sendable {
     }
 
     private func restartRequestingMediaData(_ renderer: AVSampleBufferAudioRenderer, from time: CMTime, rate: Float) {
-        var didStart = false
+        nonisolated(unsafe) var didStart = false
         renderer.requestMediaDataWhenReady(on: queue) { [weak self] in
             guard let self, let audioRenderer, let audioSynchronizer, let audioBuffersQueue else { return }
             while let buffer = audioBuffersQueue.peek(), audioRenderer.isReadyForMoreMediaData {
                 audioRenderer.enqueue(buffer)
                 audioBuffersQueue.removeFirst()
-                onDurationChanged(audioBuffersQueue.duration)
+                onEvent(.durationChanged(audioBuffersQueue.duration))
             }
             if !didStart {
                 audioSynchronizer.setRate(rate, time: time)
@@ -246,7 +217,7 @@ final class AudioSynchronizer: @unchecked Sendable {
         guard shouldStart else { return }
         audioSynchronizer.setRate(rate, time: .zero)
         didStart = true
-        onPlaying()
+        onEvent(.stateChanged(.playing))
     }
 
     private func stopRequestingMediaDataIfNeeded() {
@@ -288,7 +259,7 @@ final class AudioSynchronizer: @unchecked Sendable {
         audioRendererRateCancellable = NotificationCenter.default
             .publisher(for: name).sink { [weak self, weak audioSynchronizer] _ in
                 guard let self, let audioSynchronizer else { return }
-                onRateChanged(audioSynchronizer.rate)
+                onEvent(.rateChanged(audioSynchronizer.rate))
             }
     }
 
@@ -306,13 +277,13 @@ final class AudioSynchronizer: @unchecked Sendable {
             guard let self else { return }
             updateCurrentBufferIfNeeded(at: time)
             if let audioBuffersQueue, let audioSynchronizer, time >= audioBuffersQueue.duration {
-                onTimeChanged(audioBuffersQueue.duration)
+                onEvent(.timeChanged(audioBuffersQueue.duration))
                 audioSynchronizer.setRate(0.0, time: audioSynchronizer.currentTime())
-                onRateChanged(0.0)
+                onEvent(.rateChanged(0.0))
                 invalidate()
-                onComplete()
+                onEvent(.stateChanged(.complete))
             } else {
-                onTimeChanged(time)
+                onEvent(.timeChanged(time))
             }
         }
     }
@@ -321,7 +292,7 @@ final class AudioSynchronizer: @unchecked Sendable {
         guard let audioBuffersQueue,
               let buffer = audioBuffersQueue.buffer(at: time),
               buffer.presentationTimeStamp != currentSampleBufferTime else { return }
-        onSampleBufferChanged(buffer)
+        onEvent(.sampleBufferChanged(buffer))
         currentSampleBufferTime = buffer.presentationTimeStamp
     }
 
@@ -334,7 +305,7 @@ final class AudioSynchronizer: @unchecked Sendable {
         cancelErrorObservation()
         audioRendererErrorCancellable = audioRenderer.publisher(for: \.error).sink { [weak self] error in
             guard let self else { return }
-            onError(error.flatMap(AudioPlayerError.init))
+            onEvent(.stateChanged(.failed(error.flatMap(AudioPlayerError.init))))
         }
     }
 

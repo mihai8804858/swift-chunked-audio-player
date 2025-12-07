@@ -17,17 +17,12 @@ final class AudioBuffersQueue: @unchecked Sendable {
         self.duration = CMTime(value: 0, timescale: Int32(audioDescription.mSampleRate))
     }
 
-    func enqueue(
-        numberOfBytes: UInt32,
-        bytes: UnsafeRawPointer,
-        numberOfPackets: UInt32,
-        packets: UnsafeMutablePointer<AudioStreamPacketDescription>?
-    ) throws {
+    func enqueue(packets: AudioFileStream.Packets) throws {
         try withLock(lock) {
             guard let buffer = try makeSampleBuffer(
-                from: Data(bytes: bytes, count: Int(numberOfBytes)),
-                packetCount: numberOfPackets,
-                packetDescriptions: packets
+                from: Data(bytes: packets.bytes, count: Int(packets.numberOfBytes)),
+                packetCount: packets.numberOfPackets,
+                packetDescriptions: packets.packets
             ) else { return }
             updateDuration(for: buffer)
             enqueuedBuffers.append(buffer)

@@ -2,19 +2,21 @@ import AVFoundation
 import AudioToolbox
 
 final class AudioFileStream: @unchecked Sendable {
-    typealias ErrorCallback = @Sendable (_ error: AudioPlayerError) -> Void
-    typealias ASBDCallback = @Sendable (_ asbd: AudioStreamBasicDescription) -> Void
-    typealias PacketsCallback = @Sendable (
-        _ numberOfBytes: UInt32,
-        _ bytes: UnsafeRawPointer,
-        _ numberOfPackets: UInt32,
-        _ packets: UnsafeMutablePointer<AudioStreamPacketDescription>?
-    ) -> Void
+    struct Packets: @unchecked Sendable {
+        let numberOfBytes: UInt32
+        let bytes: UnsafeRawPointer
+        let numberOfPackets: UInt32
+        let packets: UnsafeMutablePointer<AudioStreamPacketDescription>?
+    }
+
+    enum Event: Sendable {
+        case asbdReceived(AudioStreamBasicDescription)
+        case packetsReceived(Packets)
+        case failure(AudioPlayerError)
+    }
 
     private let lock = NSLock()
-    private let receiveError: ErrorCallback
-    private let receiveASBD: ASBDCallback
-    private let receivePackets: PacketsCallback
+    private let onEvent: @Sendable (Event) -> Void
 
     private(set) var audioStreamID: AudioFileStreamID?
     private(set) var fileTypeID: AudioFileTypeID?
@@ -22,14 +24,10 @@ final class AudioFileStream: @unchecked Sendable {
 
     init(
         type: AudioFileTypeID? = nil,
-        receiveError: @escaping ErrorCallback,
-        receiveASBD: @escaping ASBDCallback,
-        receivePackets: @escaping PacketsCallback
+        onEvent: @escaping @Sendable (Event) -> Void
     ) {
         self.fileTypeID = type
-        self.receiveError = receiveError
-        self.receiveASBD = receiveASBD
-        self.receivePackets = receivePackets
+        self.onEvent = onEvent
     }
 
     func open() {
@@ -47,8 +45,8 @@ final class AudioFileStream: @unchecked Sendable {
                     packets: packets
                 )
             }, fileTypeID ?? 0, &audioStreamID)
-            if status != noErr { receiveError(.status(status)) }
-            if audioStreamID == nil { receiveError(.streamNotOpened) }
+            if status != noErr { onEvent(.failure(.status(status))) }
+            if audioStreamID == nil { onEvent(.failure(.streamNotOpened)) }
         }
     }
 
@@ -85,10 +83,10 @@ final class AudioFileStream: @unchecked Sendable {
         var asbdSize: UInt32 = 0
         var asbd = AudioStreamBasicDescription()
         let getInfoStatus = AudioFileStreamGetPropertyInfo(audioStreamID, propertyID, &asbdSize, nil)
-        guard getInfoStatus == noErr else { return receiveError(.status(getInfoStatus)) }
+        guard getInfoStatus == noErr else { return onEvent(.failure(.status(getInfoStatus))) }
         let getPropertyStatus = AudioFileStreamGetProperty(audioStreamID, propertyID, &asbdSize, &asbd)
-        guard getPropertyStatus == noErr else { return receiveError(.status(getPropertyStatus)) }
-        receiveASBD(asbd)
+        guard getPropertyStatus == noErr else { return onEvent(.failure(.status(getPropertyStatus))) }
+        onEvent(.asbdReceived(asbd))
     }
 
     private func onFileStreamPacketsReceived(
@@ -97,6 +95,11 @@ final class AudioFileStream: @unchecked Sendable {
         numberOfPackets: UInt32,
         packets: UnsafeMutablePointer<AudioStreamPacketDescription>?
     ) {
-        receivePackets(numberOfBytes, bytes, numberOfPackets, packets)
+        onEvent(.packetsReceived(Packets(
+            numberOfBytes: numberOfBytes,
+            bytes: bytes,
+            numberOfPackets: numberOfPackets,
+            packets: packets
+        )))
     }
 }
