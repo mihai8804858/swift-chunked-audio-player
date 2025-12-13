@@ -55,6 +55,9 @@ jobs:
         with:
           xcode-version: latest-stable
 
+      - name: List Simulators
+        run: xcrun simctl list
+
       - name: Build platforms in ${{ matrix.config }}
         run: make CONFIG=${{ matrix.config }} build-all-platforms
 
@@ -70,6 +73,9 @@ jobs:
       - uses: maxim-lobanov/setup-xcode@v1
         with:
           xcode-version: latest-stable
+
+      - name: List Simulators
+        run: xcrun simctl list
 
       - name: Build example
         run: make build-example
