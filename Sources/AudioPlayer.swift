@@ -60,6 +60,11 @@ public final class AudioPlayer: ObservableObject, @unchecked Sendable {
         startReceivingData(from: stream)
     }
 
+    @available(iOS 18, tvOS 18, macOS 15, visionOS 2, *)
+    public func start(_ sequence: any AsyncSequence<Data, Error> & Sendable, type: AudioFileTypeID? = nil) {
+        start(sequence.stream(), type: type)
+    }
+
     public func stop() {
         cancelDataTask()
         cancelSynchronizer()
