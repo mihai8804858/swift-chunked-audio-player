@@ -180,10 +180,8 @@ final class AudioSynchronizer: @unchecked Sendable {
             if let buffer = audioBuffersQueue.peek(), isBuffering {
                 audioRenderer.enqueue(buffer)
                 audioBuffersQueue.removeFirst()
-                if audioRenderer.hasSufficientMediaDataForReliablePlaybackStart || dataComplete {
-                    audioSynchronizer.setRate(rate, time: audioSynchronizer.currentTime())
-                    isBuffering = false
-                }
+                audioSynchronizer.setRate(rate, time: audioSynchronizer.currentTime())
+                isBuffering = false
             }
         } catch {
             onEvent(.stateChanged(.failed(AudioPlayerError(error: error))))
@@ -225,8 +223,6 @@ final class AudioSynchronizer: @unchecked Sendable {
               let audioSynchronizer,
               audioSynchronizer.rate == 0,
               !didStart else { return }
-        let shouldStart = audioRenderer.hasSufficientMediaDataForReliablePlaybackStart || dataComplete
-        guard shouldStart else { return }
         audioSynchronizer.setRate(rate, time: time)
         didStart = true
         onEvent(.stateChanged(.playing))
