@@ -1,4 +1,4 @@
-// swift-tools-version:6.0
+// swift-tools-version:6.2
 
 import PackageDescription
 
@@ -20,8 +20,7 @@ let package = Package(
         .target(
             name: "ChunkedAudioPlayer",
             path: "Sources",
-            resources: [.copy("Resources/PrivacyInfo.xcprivacy")],
-            swiftSettings: [.enableExperimentalFeature("StrictConcurrency")]
+            resources: [.copy("Resources/PrivacyInfo.xcprivacy")]
         )
     ],
     swiftLanguageModes: [.v6]

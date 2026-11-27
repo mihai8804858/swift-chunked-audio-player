@@ -7,11 +7,11 @@ GENERIC_PLATFORM_MAC_CATALYST = platform=macOS,variant=Mac Catalyst
 GENERIC_PLATFORM_TVOS = generic/platform=tvOS
 GENERIC_PLATFORM_VISIONOS = generic/platform=visionOS
 
-SIM_PLATFORM_IOS = platform=iOS Simulator,id=$(call udid_for,iOS 26.1,iPhone \d\+ Pro [^M])
+SIM_PLATFORM_IOS = platform=iOS Simulator,id=$(call udid_for,iOS,iPhone [0-9]+ Pro [^M])
 SIM_PLATFORM_MACOS = platform=macOS,arch=arm64
 SIM_PLATFORM_MAC_CATALYST = platform=macOS,variant=Mac Catalyst,arch=arm64
-SIM_PLATFORM_TVOS = platform=tvOS Simulator,id=$(call udid_for,tvOS 26.1,TV)
-SIM_PLATFORM_VISIONOS = platform=visionOS Simulator,id=$(call udid_for,visionOS 26.1,Vision)
+SIM_PLATFORM_TVOS = platform=tvOS Simulator,id=$(call udid_for,tvOS,TV)
+SIM_PLATFORM_VISIONOS = platform=visionOS Simulator,id=$(call udid_for,visionOS,Vision)
 
 GREEN='\033[0;32m'
 NC='\033[0m'
@@ -61,6 +61,7 @@ all: lint spell build-all-platforms build-example
 .PHONY: all
 .DEFAULT_GOAL := all
 
+# Picks the matching simulator on the newest installed runtime of the given OS.
 define udid_for
-$(shell xcrun simctl list devices available '$(1)' | grep '$(2)' | sort -r | head -1 | awk -F '[()]' '{ print $$(NF-3) }')
+$(shell xcrun simctl list devices available | awk -v os='$(1)' -v pat='$(2)' '/^-- / { rt = $$2; ver = $$3; next } rt == os && $$0 ~ pat && match($$0, /[0-9A-F]{8}-[0-9A-F-]{27}/) { print ver, substr($$0, RSTART, RLENGTH) }' | sort -V | tail -1 | cut -d' ' -f2)
 endef
